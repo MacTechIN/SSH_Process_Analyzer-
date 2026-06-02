@@ -11,6 +11,11 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/tenants/$(tenantId)/memberships/$(request.auth.uid));
     }
 
+    function isPublishedGeneration(tenantId, hostId, generationId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/hosts/$(hostId)).data.publishedGeneration
+        == generationId;
+    }
+
     match /tenants/{tenantId} {
       allow read: if isTenantMember(tenantId);
       allow write: if false;
@@ -30,11 +35,13 @@ service cloud.firestore {
         }
 
         match /generations/{generationId} {
-          allow read: if isTenantMember(tenantId);
+          allow read: if isTenantMember(tenantId)
+            && isPublishedGeneration(tenantId, hostId, generationId);
           allow write: if false;
 
           match /processes/{processKey} {
-            allow read: if isTenantMember(tenantId);
+            allow read: if isTenantMember(tenantId)
+              && isPublishedGeneration(tenantId, hostId, generationId);
             allow write: if false;
           }
         }

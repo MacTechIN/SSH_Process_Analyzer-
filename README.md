@@ -53,15 +53,19 @@ web/             React 웹앱
 
 ## 개발 상태
 
-현재 단계: `Phase 1 - 스캐폴딩과 계약 정의`
+현재 단계: `Phase 2 - Firestore Rules와 generation repository 구현`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
 - 완료: canonical signing v1과 replay fixture
 - 완료: Firestore Rules와 index 초안
 - 완료: OS process 소유주 기준 통계 계약
+- 완료: generation repository 상태 전이와 in-memory transaction adapter
+- 완료: publish pointer 역행 방지, agent binding, quarantine, cleanup claim 단위 테스트
+- 완료: Firestore emulator 실행 설정과 Rules 정적 계약 테스트
 - 진행 전: Phase 0 운영 정책 값 확정
-- 진행 전: collector, API, web 실제 구현
+- 진행 전: Firebase SDK 기반 repository adapter와 emulator 통합 테스트
+- 진행 전: collector API vertical slice, collector, web 실제 구현
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
 운영 정책 미정값은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
@@ -114,6 +118,20 @@ tests/
 - 테스트가 생기면 `tests/` 트리를 fixture, integration, unit, e2e로 확장하도록 기준 추가
 - 테스트: 문서 변경만 수행했으며 애플리케이션 테스트는 아직 없음
 - 남은 작업: Phase 0 운영 정책 값 확정, collector/API/web 실제 구현
+
+### 2026-06-02 - v0.2.0
+
+- Phase 2 generation repository 상태 전이 구현
+- in-memory transaction adapter 추가
+- immutable process staging, batch manifest 완료, 0건 snapshot publish 구현
+- agent tenant/host binding, quarantine, 오래된 snapshot과 동일 시각 snapshot pointer 역행 방지 구현
+- cleanup `deleting` claim, active resume lease 차단, idempotent delete 구현
+- Firestore Rules를 현재 published generation만 브라우저에서 읽을 수 있도록 제한
+- Firestore emulator 설정과 `tests/unit/`, `tests/integration/` 트리 추가
+- 테스트: `npm test` 통과, unit 및 Rules 정적 계약 테스트 13개 성공
+- 테스트: JSON 설정 파일 `jq empty` 검증 성공
+- 미실행: Firebase SDK 기반 emulator 통합 테스트는 adapter 연결 후 수행
+- 남은 작업: Phase 0 운영 정책 값 확정, Firebase adapter와 emulator 통합 테스트, Phase 3 collector API vertical slice
 
 ## 참고 문서
 

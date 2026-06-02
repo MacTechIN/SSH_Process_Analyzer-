@@ -1,0 +1,10 @@
+{
+  "name": "ssh-process-analyzer",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.js",
+    "test:repository": "node --test tests/unit/generation-repository.test.js"
+  }
+}
