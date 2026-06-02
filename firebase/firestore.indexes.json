@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "capturedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "snapshots",
+      "fieldPath": "expiresAt",
+      "indexes": []
+    }
+  ]
+}

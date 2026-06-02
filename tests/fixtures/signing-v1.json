@@ -1,0 +1,12 @@
+{
+  "description": "identity encoding canonical signing fixture",
+  "bodyUtf8": "{\"schemaVersion\":1,\"snapshotId\":\"123e4567-e89b-42d3-a456-426614174000\",\"capturedAt\":\"2026-06-02T07:00:00Z\",\"processes\":[]}",
+  "bodySha256LowerHex": "ab8a1bc408cf2e1f0553ffb2d972060ee61752719641b6eb9c1d126483dafd15",
+  "timestampRfc3339Utc": "2026-06-02T07:00:01Z",
+  "nonceLowerHex64": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "agentId": "agent_01",
+  "kid": "key_01",
+  "canonicalUtf8": "POST\n/v1/snapshots\nab8a1bc408cf2e1f0553ffb2d972060ee61752719641b6eb9c1d126483dafd15\n2026-06-02T07:00:01Z\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nagent_01\nkey_01\n",
+  "canonicalSha256LowerHex": "144dd645b1f755ad0705586bc224cb943fdc65c9fa6d4b041cb376285447d9c5",
+  "replayDocumentId": "6f859be893036010da6addd3e2d468529dbda17d4dd0fe9d482530fe808886d3"
+}

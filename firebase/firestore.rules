@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isTenantMember(tenantId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/tenants/$(tenantId)/memberships/$(request.auth.uid));
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if isTenantMember(tenantId);
+      allow write: if false;
+
+      match /memberships/{uid} {
+        allow read: if isTenantMember(tenantId) && request.auth.uid == uid;
+        allow write: if false;
+      }
+
+      match /hosts/{hostId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if false;
+
+        // History is exposed only through the authenticated server API.
+        match /snapshots/{snapshotId} {
+          allow read, write: if false;
+        }
+
+        match /generations/{generationId} {
+          allow read: if isTenantMember(tenantId);
+          allow write: if false;
+
+          match /processes/{processKey} {
+            allow read: if isTenantMember(tenantId);
+            allow write: if false;
+          }
+        }
+      }
+
+      match /agents/{agentId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /replayRecords/{recordId} {
+      allow read, write: if false;
+    }
+  }
+}

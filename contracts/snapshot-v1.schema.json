@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ssh-process-monitoring.local/contracts/snapshot-v1.schema.json",
+  "title": "Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "snapshotId", "capturedAt", "processes"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "snapshotId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "processes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/process" }
+    }
+  },
+  "$defs": {
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processKey",
+        "bootId",
+        "pid",
+        "startTicks",
+        "startedAt",
+        "ownerName",
+        "executable",
+        "classificationStatus",
+        "cpuPercent",
+        "memoryBytes"
+      ],
+      "properties": {
+        "processKey": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bootId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "pid": { "type": "integer", "minimum": 1 },
+        "startTicks": { "type": "integer", "minimum": 0 },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "ownerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "executable": { "type": "string", "minLength": 1 },
+        "allowedArgs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "workingDirectory": { "type": "string" },
+        "taskType": { "type": ["string", "null"] },
+        "classificationStatus": {
+          "type": "string",
+          "enum": ["classified", "unclassified"]
+        },
+        "cpuPercent": { "type": "number", "minimum": 0 },
+        "memoryBytes": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
