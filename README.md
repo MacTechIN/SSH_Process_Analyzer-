@@ -70,6 +70,35 @@ web/             React 웹앱
 
 진행 기록은 시계열로 누적한다. 기존 기록을 수정하거나 덮어쓰기보다 새 항목을 아래에 추가한다.
 
+## 단계별 버전 관리 규칙
+
+각 개발 단계 또는 독립적으로 검증 가능한 작업 단위가 끝날 때마다 아래 절차를 수행한다.
+
+1. 변경 사항과 테스트 결과를 확인한다.
+2. 테스트 파일이나 fixture가 추가되면 `tests/` 아래 트리를 기능별로 확장한다.
+3. README의 개발 상태와 개발 진행 기록에 날짜, 버전, 작업 설명, 테스트 결과를 추가한다.
+4. 변경 파일을 Git commit으로 기록한다.
+5. `main` 브랜치를 원격 저장소에 push한다.
+
+기록에는 최소한 아래 내용을 포함한다.
+
+- 날짜
+- 버전
+- 작업 설명
+- 추가 또는 변경된 주요 파일
+- 실행한 테스트와 결과
+- 남은 작업 또는 미정 운영값
+
+테스트 트리는 구현 범위에 따라 아래 구조에서 확장한다.
+
+```text
+tests/
+  fixtures/       signing, snapshot, process, auth 입력 데이터
+  integration/    API, repository, Firestore Rules, UI 통합 검증
+  unit/           모듈 단위 검증이 생기면 추가
+  e2e/            staging 사용자 흐름 검증이 생기면 추가
+```
+
 ### 2026-06-02 - v0.1.0
 
 - 프로젝트 저장소 초기화
@@ -78,6 +107,13 @@ web/             React 웹앱
 - snapshot, signing, analytics 계약 추가
 - Firestore Rules, index, env 예시 추가
 - Figma 파일은 추후 제공 후 선별 반영 예정
+
+### 2026-06-02 - v0.1.1
+
+- 단계 완료 시 README 기록, Git commit, `main` push를 수행하는 규칙 추가
+- 테스트가 생기면 `tests/` 트리를 fixture, integration, unit, e2e로 확장하도록 기준 추가
+- 테스트: 문서 변경만 수행했으며 애플리케이션 테스트는 아직 없음
+- 남은 작업: Phase 0 운영 정책 값 확정, collector/API/web 실제 구현
 
 ## 참고 문서
 
