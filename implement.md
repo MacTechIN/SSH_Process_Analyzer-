@@ -19,7 +19,7 @@ Linux systemd timer oneshot collector
   -> Firebase Hosting
 ```
 
-Firebase·GCP 프로젝트 base name 후보는 `ssh-analyzer`이다. 실제 `stagingProjectId`, `prodProjectId`, Firebase CLI alias는 Phase 0에서 각각 확정한다.
+Firebase·GCP 프로젝트 base name 후보는 `ssh-analyzer`이다. 실제 `stagingProjectId`, `prodProjectId`는 배포 전에 외부 입력으로 지정하고 Firebase CLI alias는 `staging`, `production`으로 고정한다.
 
 - 웹앱 배포: Firebase Hosting
 - 데이터 저장: Cloud Firestore
@@ -47,7 +47,7 @@ tests/integration/      API, Firestore Rules, UI 통합 테스트
 
 ### Phase 0. 운영 정책 확정
 
-구현 전에 아래 값을 확정한다.
+MVP 운영 기본값은 `docs/phase0-decisions.md`에서 확정한다. 실제 staging/prod GCP·Firebase project ID는 배포 전에 외부 입력으로 지정한다.
 
 - 서버 수, 서버당 평균 및 최대 프로세스 수
 - 저장할 프로세스 필드와 `args` 마스킹 범위
@@ -57,7 +57,7 @@ tests/integration/      API, Firestore Rules, UI 통합 테스트
 - replay 허용 clock skew와 nonce 보존 시간
 - `capturedAt` 미래 허용 skew와 spool 과거 허용 기간, 미래 시각 poisoning 운영자 복구 절차
 - VM clone 의심 시 quarantine 조건과 해제 절차
-- 프로세스 안정 키 정의: `pid + startTime` 기반 후보
+- 프로세스 안정 키: `sha256(bootId + LF + pid + LF + startTicks)` lowercase hex
 - offline backlog 허용 여부, 로컬 spool 상한과 만료 시간
 - snapshot 보존 기간
 - stale, warn, offline 판정 시간
@@ -66,8 +66,7 @@ tests/integration/      API, Firestore Rules, UI 통합 테스트
 - 지원 Linux 배포판, 프록시, 사설 CA 사용 여부
 - API 최대 body 크기, gzip 요청 허용 여부, 서버당 최대 프로세스 수
 - gzip 허용 시 압축 body와 압축 해제 body 각각의 최대 크기
-- 최대 프로세스 수 또는 요청 크기 초과 시 정책: 전체 reject 또는 truncate 후 불완전 snapshot 저장 중 선택
-- truncate 허용 시 `isComplete=false`, `truncatedReason`, `receivedProcessCount`, `storedProcessCount` 기록 방식
+- 최대 프로세스 수 또는 요청 크기 초과 시 정책: HTTP `413` 전체 reject. MVP에서 truncate 금지
 - Firestore write batch 분할 크기와 모든 batch 성공 후에만 generation을 `ready`로 전환하는 완료 조건
 - 10k 초과 또는 Firestore 한계 초과 시 저장 정책: 분할 publish, 요약 저장, 수집 거부 중 선택
 
@@ -182,7 +181,7 @@ remote-actions/execute_remote_action
 - 동일 ID와 동일 hash 재전송은 성공 처리하되 중복 write 금지
 - 동일 ID와 다른 hash는 conflict 처리 및 감사 로그 기록
 - 인증, 파싱, 저장 실패 시 마지막 정상 current 상태 보존
-- 압축 body 크기와 압축 해제 body 크기 초과는 HTTP `413`으로 reject한다. truncate fallback은 byte 한계를 통과하고 유효 JSON 파싱을 마친 뒤 process count만 초과한 경우에만 허용한다.
+- 압축 body 크기, 압축 해제 body 크기, process count 초과는 HTTP `413`으로 전체 reject한다. MVP에서 truncate fallback은 허용하지 않는다.
 - agent 공개키 등록, 회전, 회수 절차 문서화
 - collector-api 전용 Cloud Run runtime service account와 최소 IAM 적용
 - Secret Manager는 서버 측 secret에만 사용하고 Firebase Web SDK 공개 설정 및 agent private key 저장에 사용하지 않음
@@ -293,7 +292,7 @@ remote-actions/execute_remote_action
 - TTL 삭제 이후 orphan 하위 데이터가 무기한 남지 않음
 - 10k fixture로 API 요청 크기, Firestore batch 한계, latency, UI pagination, 조회 비용 검증
 - 10k 초과 또는 한계 초과 시 Phase 0에서 선택한 fallback 정책 검증
-- truncate 정책을 선택한 경우 불완전 snapshot 표지와 UI 표시 검증
+- byte 또는 process count 한계 초과 요청이 HTTP `413`으로 전체 reject되고 current pointer를 바꾸지 않는지 검증
 
 ## 6. 테스트 fixture
 
@@ -304,7 +303,7 @@ remote-actions/execute_remote_action
 - PID 재사용, startTime 변경, 긴 cmdline, 민감정보 포함 cmdline
 - TTL 만료 직전, 직후, 삭제 지연 상태
 - Cloud Storage 원본 보관 ON/OFF
-- gzip 허용/거부, 압축 body와 압축 해제 body 최대 크기 경계, 최대 프로세스 수 경계, truncate 또는 reject fallback
+- gzip 허용/거부, 압축 body와 압축 해제 body 최대 크기 경계, 최대 프로세스 수 경계, HTTP `413` 전체 reject
 - spool byte/file 상한, 만료, oldest-drop 또는 reject, 동일 snapshot ID 재전송
 - installation instance ID 충돌, agent/key/fingerprint 조합 충돌, IP만 변경된 정상 agent
 - agent registry tenant/host binding 위조, 오래된 snapshot 지연 도착, 동일 `capturedAt` 충돌, cleanup job idempotent 재실행
@@ -355,8 +354,11 @@ Figma Make에서 UI 생성
 
 - 프로젝트 루트 지정 완료
 - Firebase Hosting과 Cloud Firestore 사용 확정
-- Firebase·GCP 프로젝트 base name 후보 `ssh-analyzer` 지정 완료. staging/prod 실제 ID와 alias는 Phase 0에서 확정
+- Firebase·GCP 프로젝트 base name 후보 `ssh-analyzer` 지정 완료. staging/prod 실제 ID는 배포 전 외부 입력으로 지정하고 CLI alias는 `staging`, `production`으로 확정
 - Push MVP 아키텍처 확정
 - QA P0 기준 확정
 - Figma Make 적용은 후속 단계로 이동
-- 다음 작업: 운영 정책 값 확정 후 Phase 1 착수
+- Phase 0 MVP 운영 기본값 확정. 실제 staging/prod project ID 입력은 배포 전 필요
+- Phase 1 스캐폴딩과 계약 정의 완료
+- Phase 2 generation repository와 Rules 정적 계약 테스트 진행 중
+- 다음 작업: Firebase SDK adapter와 emulator 통합 테스트

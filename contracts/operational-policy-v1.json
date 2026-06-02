@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "region": "asia-northeast3",
+  "collector": {
+    "intervalSeconds": 60,
+    "supportedLinux": ["ubuntu-22.04-lts", "ubuntu-24.04-lts"],
+    "spool": {
+      "enabled": true,
+      "maxBytes": 104857600,
+      "maxFiles": 1000,
+      "maxFileBytes": 8388608,
+      "retentionSeconds": 86400,
+      "overflowPolicy": "oldest-drop"
+    }
+  },
+  "snapshot": {
+    "retentionSeconds": 604800,
+    "maxWireBodyBytes": 8388608,
+    "maxDecompressedBodyBytes": 16777216,
+    "maxProcesses": 10000,
+    "allowedContentEncodings": ["identity", "gzip"],
+    "overflowPolicy": "reject-413",
+    "firestoreProcessBatchSize": 400
+  },
+  "security": {
+    "replayClockSkewSeconds": 300,
+    "replayTtlSeconds": 86400,
+    "capturedAtFutureSkewSeconds": 300,
+    "capturedAtPastLimitSeconds": 86400
+  },
+  "health": {
+    "staleAfterSeconds": 120,
+    "warnAfterSeconds": 300,
+    "offlineAfterSeconds": 900
+  },
+  "classification": {
+    "longRunningAfterSeconds": 86400,
+    "duplicateSuspicionScope": ["hostId", "ownerName", "taskType", "executable"],
+    "duplicateSuspicionMinimumCount": 2,
+    "unclassifiedFallback": true
+  },
+  "cleanup": {
+    "intervalSeconds": 3600,
+    "maxGenerationsPerRun": 100,
+    "timeoutSeconds": 900,
+    "maxRetries": 3
+  }
+}

@@ -63,12 +63,13 @@ web/             React 웹앱
 - 완료: generation repository 상태 전이와 in-memory transaction adapter
 - 완료: publish pointer 역행 방지, agent binding, quarantine, cleanup claim 단위 테스트
 - 완료: Firestore emulator 실행 설정과 Rules 정적 계약 테스트
-- 진행 전: Phase 0 운영 정책 값 확정
+- 완료: Phase 0 MVP 운영 정책 기본값 확정
+- 외부 입력 필요: staging, production GCP/Firebase project ID
 - 진행 전: Firebase SDK 기반 repository adapter와 emulator 통합 테스트
 - 진행 전: collector API vertical slice, collector, web 실제 구현
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
-운영 정책 미정값은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
+운영 정책 기본값과 배포 전 외부 입력 항목은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
 
 ## 개발 진행 기록
 
@@ -133,6 +134,19 @@ tests/
 - 미실행: Firebase SDK 기반 emulator 통합 테스트는 adapter 연결 후 수행
 - 남은 작업: Phase 0 운영 정책 값 확정, Firebase adapter와 emulator 통합 테스트, Phase 3 collector API vertical slice
 
+### 2026-06-02 - v0.2.1
+
+- Phase 0 MVP 운영 정책 기본값 확정
+- 수집 주기 `60`초, snapshot 보존 `7`일, replay TTL `24`시간으로 확정
+- gzip 허용, wire body `8 MiB`, 압축 해제 body `16 MiB`, process 최대 `10,000`개로 확정
+- 초과 요청은 HTTP `413` 전체 reject, Firestore batch는 process `400`개 단위로 확정
+- 장시간 실행 `24`시간, stale `2`분, warn `5`분, offline `15`분으로 확정
+- cleanup job은 `1`시간 주기, 실행당 generation `100`개, timeout `15`분, 최대 재시도 `3`회로 확정
+- 구현 공통값을 `contracts/operational-policy-v1.json`에 추가
+- 테스트: `jq empty` 검증 성공, `npm test` unit 및 계약 테스트 `16`개 성공
+- 외부 입력 필요: staging, production GCP/Firebase project ID
+- 남은 작업: Firebase adapter와 emulator 통합 테스트, Phase 3 collector API vertical slice
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)
@@ -140,3 +154,4 @@ tests/
 - [Snapshot Schema v1](contracts/snapshot-v1.schema.json)
 - [Canonical Signing v1](contracts/signing-v1.md)
 - [Analytics v1](contracts/analytics-v1.md)
+- [Operational Policy v1](contracts/operational-policy-v1.json)
