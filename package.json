@@ -6,5 +6,8 @@
   "scripts": {
     "test": "node --test tests/unit/*.test.js",
     "test:repository": "node --test tests/unit/generation-repository.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.97.0"
   }
 }
