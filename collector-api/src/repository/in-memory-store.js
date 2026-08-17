@@ -48,6 +48,39 @@ export class InMemoryStore {
     return processKeys;
   }
 
+  async findAgent(agentId) {
+    for (const agent of this.#state.agents.values()) {
+      if (agent.agentId === agentId) {
+        return clone(agent);
+      }
+    }
+    return undefined;
+  }
+
+  async readHost(tenantId, hostId) {
+    return clone(this.#state.hosts.get(key(tenantId, hostId)));
+  }
+
+  async readGeneration(tenantId, hostId, snapshotId) {
+    return clone(this.#state.generations.get(key(tenantId, hostId, snapshotId)));
+  }
+
+  async listProcesses(tenantId, hostId, snapshotId, options = {}) {
+    const limit = options.limit ?? PROCESS_DELETE_CHUNK_SIZE;
+    const prefix = processPrefix(tenantId, hostId, snapshotId);
+    const processes = [];
+    for (const [storedKey, process] of this.#state.processes.entries()) {
+      if (!storedKey.startsWith(prefix)) {
+        continue;
+      }
+      processes.push(clone(process));
+      if (processes.length === limit) {
+        break;
+      }
+    }
+    return processes;
+  }
+
   async deleteProcessChunk(tenantId, hostId, snapshotId, processKeys) {
     if (processKeys.length > FIRESTORE_MAX_BATCH_WRITES) {
       fail("BATCH_WRITE_LIMIT", `a write batch cannot exceed ${FIRESTORE_MAX_BATCH_WRITES} operations`);

@@ -53,7 +53,7 @@ web/             React 웹앱
 
 ## 개발 상태
 
-현재 단계: `Phase 2 - Firestore Rules와 generation repository 구현`
+현재 단계: `Phase 3 - collector-api vertical slice 구현`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
@@ -65,9 +65,10 @@ web/             React 웹앱
 - 완료: Firestore emulator 실행 설정과 Rules 정적 계약 테스트
 - 완료: Phase 0 MVP 운영 정책 기본값 확정
 - 완료: Firestore 트랜잭션 제약을 저장소 인터페이스에 반영. 읽기 선행, 트랜잭션 `500` write 상한, 재귀 삭제 분리
+- 완료: collector-api vertical slice. Ed25519 서명 검증, replay 차단, snapshot v1 검증, generation publish, 현재 세대 조회
 - 외부 입력 필요: staging, production GCP/Firebase project ID
 - 진행 전: Firebase SDK 기반 repository adapter와 emulator 통합 테스트
-- 진행 전: collector API vertical slice, collector, web 실제 구현
+- 진행 전: collector 구현, snapshot history 조회 API, web 실제 구현
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
 운영 정책 기본값과 배포 전 외부 입력 항목은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
@@ -161,6 +162,21 @@ tests/
 - 테스트: `npm test` 통과, 기존 `16`개 유지에 신규 `6`개 추가하여 `22`개 성공
 - 남은 작업: Phase 3 collector-api vertical slice, Firebase adapter, emulator 통합 테스트
 - 미실행: emulator 통합 테스트와 Rules allow/deny matrix는 어댑터와 웹 클라이언트 작업 시점으로 이동
+
+### 2026-08-17 - v0.4.0
+
+- collector-api vertical slice 구현. 의존성 없이 Node 내장 모듈만 사용
+- `POST /v1/snapshots` 구현. `Content-Encoding` 확인, wire body 상한, 서명 header 검증, agent registry 조회, revoked key 거부, Ed25519 검증, clock skew 확인, replay create-only 기록, gzip 해제 상한, snapshot v1 검증, process 수 상한, `capturedAt` 허용 범위 확인 후 `beginSnapshot` → `stageBatch` → `markReady` → `publish` 호출
+- 서명 검증을 통과한 요청만 replay record를 생성하도록 순서 고정
+- gzip 요청의 body digest를 압축된 wire 바이트 기준으로 계산하는 계약을 실제 요청으로 검증
+- `GET /v1/tenants/{tenantId}/hosts/{hostId}/current` 추가. `DEV_READ_API_ENABLED=true`일 때만 열리는 검증용 조회이며 기본값은 비활성
+- `X-Correlation-Id` 수신 또는 생성 후 응답 header와 로그에 전달. 서명과 body는 로그에 기록하지 않음
+- 저장소에 비트랜잭션 읽기 `findAgent`, `readHost`, `readGeneration`, `listProcesses` 추가
+- 추가 파일: `collector-api/src/`의 `config.js`, `signing.js`, `snapshot-schema.js`, `snapshot-service.js`, `server.js`, `in-memory-replay-store.js`, `api-error.js`, `index.js`, `scripts/smoke.mjs`
+- 테스트: `npm test` 통과, unit `24`개와 integration `13`개 합계 `37`개 성공
+- 테스트: signing v1 fixture의 body digest, canonical payload, canonical hash, replay document ID 4개 벡터가 구현과 일치함을 확인
+- 검증: `node collector-api/scripts/smoke.mjs`로 서명 push와 현재 세대 조회 정상 동작 확인
+- 남은 작업: Firebase adapter와 emulator 통합 테스트, collector 구현, snapshot history 조회 API, host `lastAttemptAt` 갱신, cleanup scheduled job
 
 ## 참고 문서
 

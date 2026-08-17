@@ -1,0 +1,46 @@
+import { readFileSync } from "node:fs";
+
+const POLICY_URL = new URL("../../contracts/operational-policy-v1.json", import.meta.url);
+
+export const operationalPolicy = JSON.parse(readFileSync(POLICY_URL, "utf8"));
+
+function number(env, name, fallback) {
+  const raw = env[name];
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be a number`);
+  }
+  return parsed;
+}
+
+export function createConfig(env = process.env, policy = operationalPolicy) {
+  return {
+    port: number(env, "PORT", 8080),
+    maxWireBodyBytes: number(env, "MAX_WIRE_BODY_BYTES", policy.snapshot.maxWireBodyBytes),
+    maxDecompressedBodyBytes: number(
+      env,
+      "MAX_DECOMPRESSED_BODY_BYTES",
+      policy.snapshot.maxDecompressedBodyBytes
+    ),
+    maxProcesses: number(env, "MAX_PROCESSES_PER_SNAPSHOT", policy.snapshot.maxProcesses),
+    processBatchSize: number(env, "FIRESTORE_PROCESS_BATCH_SIZE", policy.snapshot.firestoreProcessBatchSize),
+    allowedContentEncodings: policy.snapshot.allowedContentEncodings,
+    replayClockSkewSeconds: number(env, "REPLAY_CLOCK_SKEW_SECONDS", policy.security.replayClockSkewSeconds),
+    replayTtlSeconds: number(env, "REPLAY_TTL_SECONDS", policy.security.replayTtlSeconds),
+    capturedAtFutureSkewSeconds: number(
+      env,
+      "CAPTURED_AT_FUTURE_SKEW_SECONDS",
+      policy.security.capturedAtFutureSkewSeconds
+    ),
+    capturedAtPastLimitSeconds: number(
+      env,
+      "CAPTURED_AT_PAST_LIMIT_SECONDS",
+      policy.security.capturedAtPastLimitSeconds
+    ),
+    snapshotRetentionSeconds: number(env, "SNAPSHOT_RETENTION_SECONDS", policy.snapshot.retentionSeconds),
+    devReadApiEnabled: env.DEV_READ_API_ENABLED === "true"
+  };
+}

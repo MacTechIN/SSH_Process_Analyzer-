@@ -29,7 +29,7 @@ Firebase·GCP 프로젝트 base name 후보는 `ssh-analyzer`이다. 실제 `sta
 
 ## 3. 작업 루트와 디렉터리
 
-모든 코드, 문서, fixture, 배포 설정은 `/home/jnh/workspace/ssh_process_mgmt` 아래에서만 생성하거나 수정한다.
+모든 코드, 문서, fixture, 배포 설정은 `/home/jnh/Documents/www/ssh_process_mgmt` 아래에서만 생성하거나 수정한다.
 
 예상 디렉터리:
 
@@ -360,5 +360,7 @@ Figma Make에서 UI 생성
 - Figma Make 적용은 후속 단계로 이동
 - Phase 0 MVP 운영 기본값 확정. 실제 staging/prod project ID 입력은 배포 전 필요
 - Phase 1 스캐폴딩과 계약 정의 완료
-- Phase 2 generation repository와 Rules 정적 계약 테스트 진행 중
-- 다음 작업: Firebase SDK adapter와 emulator 통합 테스트
+- Phase 2 generation repository 완료. Firestore 트랜잭션 제약을 저장소 인터페이스에 반영
+- Phase 3 collector-api vertical slice 완료. in-memory 저장소 위에서 서명 검증, replay 차단, schema 검증, generation publish 동작
+- 다음 작업: Phase 4 collector 구현, Firebase SDK adapter와 emulator 통합 테스트
+- emulator 통합 테스트와 Rules allow/deny matrix는 Firebase adapter와 웹 클라이언트 작업 시점에 수행
