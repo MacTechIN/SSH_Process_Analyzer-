@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the SSH Process Analyzer collector every 60 seconds
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+AccuracySec=1s
+RandomizedDelaySec=5s
+Persistent=false
+Unit=ssh-process-collector.service
+
+[Install]
+WantedBy=timers.target

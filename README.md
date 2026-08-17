@@ -53,7 +53,7 @@ web/             React 웹앱
 
 ## 개발 상태
 
-현재 단계: `Phase 3 - collector-api vertical slice 구현`
+현재 단계: `Phase 4 - collector 구현`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
@@ -66,9 +66,10 @@ web/             React 웹앱
 - 완료: Phase 0 MVP 운영 정책 기본값 확정
 - 완료: Firestore 트랜잭션 제약을 저장소 인터페이스에 반영. 읽기 선행, 트랜잭션 `500` write 상한, 재귀 삭제 분리
 - 완료: collector-api vertical slice. Ed25519 서명 검증, replay 차단, snapshot v1 검증, generation publish, 현재 세대 조회
+- 완료: collector 구현. `/proc` 수집, 마스킹, 서명 push, bounded retry, spool, 중복 실행 방지, systemd unit
 - 외부 입력 필요: staging, production GCP/Firebase project ID
 - 진행 전: Firebase SDK 기반 repository adapter와 emulator 통합 테스트
-- 진행 전: collector 구현, snapshot history 조회 API, web 실제 구현
+- 진행 전: snapshot history 조회 API, agent 키 등록/회전 절차, cleanup job, web 실제 구현
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
 운영 정책 기본값과 배포 전 외부 입력 항목은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
@@ -177,6 +178,27 @@ tests/
 - 테스트: signing v1 fixture의 body digest, canonical payload, canonical hash, replay document ID 4개 벡터가 구현과 일치함을 확인
 - 검증: `node collector-api/scripts/smoke.mjs`로 서명 push와 현재 세대 조회 정상 동작 확인
 - 남은 작업: Firebase adapter와 emulator 통합 테스트, collector 구현, snapshot history 조회 API, host `lastAttemptAt` 갱신, cleanup scheduled job
+
+### 2026-08-17 - v0.5.0
+
+- Phase 4 collector 구현. 의존성 없이 Node 내장 모듈만 사용
+- `/proc` 수집 구현. `stat` 파싱은 comm에 공백과 괄호가 있어도 마지막 `)` 기준으로 처리
+- `startedAt`은 `/proc/stat`의 `btime`과 `startTicks / CLK_TCK`로 계산, `cpuPercent`는 누적 CPU를 실행 시간으로 나눈 값
+- `ownerName`은 `/etc/passwd` 조회 후 형식이 맞지 않으면 `uid-{n}`으로 대체
+- cmdline 마스킹 구현. 민감 키 할당값, 민감 플래그 다음 인자, URI credential, PEM 유사 문자열, 경로가 아닌 `32`자 이상 불투명 문자열을 `[redacted]` 처리
+- 인자는 최대 `16`개, 항목당 `256`자로 제한. raw command 전체와 환경 변수는 전송하지 않음
+- 재시도와 spool 재전송에서 최초 wire body 바이트와 `snapshotId`를 유지하고 nonce, timestamp, signature만 재생성
+- bounded retry 구현. `429`와 `5xx`, 네트워크 오류만 재시도하고 exponential backoff에 full jitter 적용
+- spool 구현. 권한 `0700` 디렉터리와 `0600` 파일, 만료 삭제, 파일 수와 byte 상한 초과 시 oldest-drop
+- 영구 거부 응답을 받은 spool 항목은 재시도하지 않고 폐기
+- lock 파일로 중복 실행 방지. stale lock은 pid 생존 확인 후 회수
+- systemd oneshot service와 `60`초 timer 추가. `NoNewPrivileges`, `ProtectSystem=strict`, 빈 `CapabilityBoundingSet` 적용
+- collector와 collector-api의 canonical signing 동일성을 교차 테스트로 고정
+- 추가 파일: `collector/src/`의 `config.js`, `signing.js`, `masking.js`, `proc.js`, `snapshot.js`, `spool.js`, `sender.js`, `lock.js`, `run-once.js`, `index.js`, `collector/systemd/`, `collector/scripts/dev-run.mjs`
+- 테스트: `npm test` 통과, unit `50`개와 integration `17`개 합계 `67`개 성공
+- 검증: `node collector/scripts/dev-run.mjs`로 실제 `/proc` process `1,045`개를 수집해 서명 push, publish, 조회까지 확인
+- 미전송: `installationInstanceId`는 생성하고 보관하지만 schema v1과 서명 header에 자리가 없어 전송하지 않음. 서버 측 clone 판정은 계약 확장 후 가능
+- 남은 작업: Firebase adapter와 emulator 통합 테스트, snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job, web 구현
 
 ## 참고 문서
 
