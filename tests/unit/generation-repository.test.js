@@ -157,6 +157,49 @@ test("cleanup claim is idempotent and blocks resume before recursive delete", as
     () => repository.stageBatch({ ...abandoned, batchIndex: 0, processes: [process()] }),
     "GENERATION_NOT_STAGING"
   );
-  assert.deepEqual(await repository.finishCleanup(abandoned), { deleted: true });
+  assert.deepEqual(await repository.finishCleanup(abandoned), { deleted: true, deletedProcessCount: 0 });
   assert.equal(store.inspect().generations.has("tenant-a/host-1/abandoned"), false);
+});
+
+test("cleanup deletes staged processes in bounded chunks outside the transaction", async () => {
+  const { store, repository } = setup();
+  const abandoned = { ...base, snapshotId: "abandoned", expectedProcessCount: 3, expectedBatchCount: 1 };
+  await repository.beginSnapshot(abandoned);
+  await repository.stageBatch({
+    ...abandoned,
+    batchIndex: 0,
+    processes: [process("process-1"), process("process-2"), process("process-3")]
+  });
+  await repository.claimCleanup({ ...abandoned, now: "2026-06-02T09:00:00Z" });
+
+  assert.deepEqual(await repository.finishCleanup({ ...abandoned, deleteChunkSize: 2 }), {
+    deleted: true,
+    deletedProcessCount: 3
+  });
+  assert.equal(store.inspect().processes.size, 0);
+});
+
+test("a staging batch cannot exceed the firestore transaction write limit", async () => {
+  const { repository } = setup();
+  const oversized = { ...base, snapshotId: "oversized", expectedProcessCount: 500, expectedBatchCount: 1 };
+  await repository.beginSnapshot(oversized);
+
+  await rejectsCode(
+    () =>
+      repository.stageBatch({
+        ...oversized,
+        batchIndex: 0,
+        processes: Array.from({ length: 500 }, (_, index) => process(`process-${index}`))
+      }),
+    "TRANSACTION_WRITE_LIMIT"
+  );
+});
+
+test("markReady rejects a manifest whose staged process count is short", async () => {
+  const { repository } = setup();
+  const short = { ...base, snapshotId: "short", expectedProcessCount: 2, expectedBatchCount: 1 };
+  await repository.beginSnapshot(short);
+  await repository.stageBatch({ ...short, batchIndex: 0, processes: [process()] });
+
+  await rejectsCode(() => repository.markReady(short), "PROCESS_COUNT_MISMATCH");
 });

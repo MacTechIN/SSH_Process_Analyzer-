@@ -1,4 +1,5 @@
 import { fail } from "./errors.js";
+import { PROCESS_DELETE_CHUNK_SIZE } from "./limits.js";
 
 const WRITABLE_STATES = new Set(["staging", "failed-retryable"]);
 const CLEANUP_BLOCKED_STATES = new Set(["ready", "publishing"]);
@@ -39,6 +40,7 @@ export class GenerationRepository {
         expectedProcessCount: input.expectedProcessCount,
         expectedBatchCount: input.expectedBatchCount,
         completedBatches: [],
+        stagedProcessCount: 0,
         status: "staging",
         resumeLeaseUntil: input.resumeLeaseUntil ?? null
       };
@@ -61,13 +63,11 @@ export class GenerationRepository {
       }
 
       for (const process of input.processes) {
-        if (tx.getProcess(input.tenantId, input.hostId, input.snapshotId, process.processKey)) {
-          fail("PROCESS_KEY_CONFLICT", "process keys are immutable within a generation");
-        }
-        tx.setProcess(input.tenantId, input.hostId, input.snapshotId, process);
+        tx.createProcess(input.tenantId, input.hostId, input.snapshotId, process);
       }
       generation.completedBatches.push(input.batchIndex);
       generation.completedBatches.sort((a, b) => a - b);
+      generation.stagedProcessCount += input.processes.length;
       generation.status = "staging";
       tx.setGeneration(generation);
       return { generation, staged: true };
@@ -86,8 +86,8 @@ export class GenerationRepository {
       if (!allBatchesComplete(generation)) {
         fail("BATCH_MANIFEST_INCOMPLETE", "all process batches must complete before ready");
       }
-      if (tx.listProcesses(input.tenantId, input.hostId, input.snapshotId).length !== generation.expectedProcessCount) {
-        fail("PROCESS_COUNT_MISMATCH", "stored process count does not match generation metadata");
+      if (generation.stagedProcessCount !== generation.expectedProcessCount) {
+        fail("PROCESS_COUNT_MISMATCH", "staged process count does not match generation metadata");
       }
       generation.status = "ready";
       generation.resumeLeaseUntil = null;
@@ -126,8 +126,8 @@ export class GenerationRepository {
       if (!allBatchesComplete(generation)) {
         fail("BATCH_MANIFEST_INCOMPLETE", "all process batches must complete before publish");
       }
-      if (tx.listProcesses(input.tenantId, input.hostId, input.snapshotId).length !== generation.expectedProcessCount) {
-        fail("PROCESS_COUNT_MISMATCH", "stored process count does not match generation metadata");
+      if (generation.stagedProcessCount !== generation.expectedProcessCount) {
+        fail("PROCESS_COUNT_MISMATCH", "staged process count does not match generation metadata");
       }
 
       if (host.publishedCapturedAt) {
@@ -139,8 +139,6 @@ export class GenerationRepository {
         }
       }
 
-      generation.status = "publishing";
-      tx.setGeneration(generation);
       host.publishedGeneration = generation.snapshotId;
       host.publishedSnapshotId = generation.snapshotId;
       host.publishedCapturedAt = generation.capturedAt;
@@ -174,19 +172,43 @@ export class GenerationRepository {
   }
 
   async finishCleanup(input) {
-    return this.store.transaction((tx) => {
-      const generation = this.#requiredGeneration(tx, input);
-      const host = tx.getHost(input.tenantId, input.hostId);
-      if (host?.publishedGeneration === input.snapshotId) {
-        fail("CURRENT_GENERATION", "current generation cannot be cleaned up");
-      }
-      if (generation.status !== "deleting") {
-        fail("GENERATION_NOT_DELETING", "cleanup must claim generation before delete");
-      }
-      tx.deleteProcesses(input.tenantId, input.hostId, input.snapshotId);
-      tx.deleteGeneration(input.tenantId, input.hostId, input.snapshotId);
-      return { deleted: true };
+    const chunkSize = input.deleteChunkSize ?? PROCESS_DELETE_CHUNK_SIZE;
+    await this.store.transaction((tx) => {
+      this.#requireClaimed(tx, input);
     });
+
+    let deletedProcessCount = 0;
+    for (;;) {
+      const processKeys = await this.store.listProcessKeys(
+        input.tenantId,
+        input.hostId,
+        input.snapshotId,
+        { limit: chunkSize }
+      );
+      if (processKeys.length === 0) {
+        break;
+      }
+      await this.store.deleteProcessChunk(input.tenantId, input.hostId, input.snapshotId, processKeys);
+      deletedProcessCount += processKeys.length;
+    }
+
+    await this.store.transaction((tx) => {
+      this.#requireClaimed(tx, input);
+      tx.deleteGeneration(input.tenantId, input.hostId, input.snapshotId);
+    });
+    return { deleted: true, deletedProcessCount };
+  }
+
+  #requireClaimed(tx, input) {
+    const generation = this.#requiredGeneration(tx, input);
+    const host = tx.getHost(input.tenantId, input.hostId);
+    if (host?.publishedGeneration === input.snapshotId) {
+      fail("CURRENT_GENERATION", "current generation cannot be cleaned up");
+    }
+    if (generation.status !== "deleting") {
+      fail("GENERATION_NOT_DELETING", "cleanup must claim generation before delete");
+    }
+    return generation;
   }
 
   #requiredGeneration(tx, input) {

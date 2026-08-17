@@ -64,6 +64,7 @@ web/             React 웹앱
 - 완료: publish pointer 역행 방지, agent binding, quarantine, cleanup claim 단위 테스트
 - 완료: Firestore emulator 실행 설정과 Rules 정적 계약 테스트
 - 완료: Phase 0 MVP 운영 정책 기본값 확정
+- 완료: Firestore 트랜잭션 제약을 저장소 인터페이스에 반영. 읽기 선행, 트랜잭션 `500` write 상한, 재귀 삭제 분리
 - 외부 입력 필요: staging, production GCP/Firebase project ID
 - 진행 전: Firebase SDK 기반 repository adapter와 emulator 통합 테스트
 - 진행 전: collector API vertical slice, collector, web 실제 구현
@@ -146,6 +147,20 @@ tests/
 - 테스트: `jq empty` 검증 성공, `npm test` unit 및 계약 테스트 `16`개 성공
 - 외부 입력 필요: staging, production GCP/Firebase project ID
 - 남은 작업: Firebase adapter와 emulator 통합 테스트, Phase 3 collector API vertical slice
+
+### 2026-08-17 - v0.3.0
+
+- generation repository의 트랜잭션 경계를 Firestore 제약에 맞게 수정
+- `stageBatch`의 process 중복 검사를 읽기 대신 create-only write 실패로 위임. 트랜잭션 내 읽기-쓰기 교차와 batch당 최대 `400`회 읽기 제거
+- `markReady`, `publish`의 process 개수 검증을 전량 조회에서 generation의 `stagedProcessCount` 누적 카운터로 교체. 트랜잭션 내 최대 `10,000`건 읽기 제거
+- `finishCleanup`을 claim 검증 트랜잭션, 트랜잭션 밖 `400`건 청크 삭제, 메타데이터 삭제 트랜잭션으로 분리. write batch `500` 한계 초과 제거
+- `publish`의 관측 불가능한 `publishing` 중간 write 제거. `deleting` claim 차단 로직은 유지
+- in-memory adapter에 Firestore 제약 가드 추가. 읽기 선행 위반은 `TRANSACTION_READ_AFTER_WRITE`, 트랜잭션 `500` write 초과는 `TRANSACTION_WRITE_LIMIT`, batch `500` write 초과는 `BATCH_WRITE_LIMIT`로 실패
+- 트랜잭션 인터페이스에서 `getProcess`, `listProcesses`, `deleteProcesses` 제거
+- 추가 파일: `collector-api/src/repository/limits.js`, `tests/unit/in-memory-store-contract.test.js`
+- 테스트: `npm test` 통과, 기존 `16`개 유지에 신규 `6`개 추가하여 `22`개 성공
+- 남은 작업: Phase 3 collector-api vertical slice, Firebase adapter, emulator 통합 테스트
+- 미실행: emulator 통합 테스트와 Rules allow/deny matrix는 어댑터와 웹 클라이언트 작업 시점으로 이동
 
 ## 참고 문서
 

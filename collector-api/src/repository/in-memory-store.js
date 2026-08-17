@@ -1,9 +1,20 @@
+import { fail } from "./errors.js";
+import {
+  FIRESTORE_MAX_BATCH_WRITES,
+  FIRESTORE_MAX_TRANSACTION_WRITES,
+  PROCESS_DELETE_CHUNK_SIZE
+} from "./limits.js";
+
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
 function key(...parts) {
   return parts.join("/");
+}
+
+function processPrefix(tenantId, hostId, snapshotId) {
+  return `${key(tenantId, hostId, snapshotId)}/`;
 }
 
 export class InMemoryStore {
@@ -21,6 +32,33 @@ export class InMemoryStore {
     return result;
   }
 
+  async listProcessKeys(tenantId, hostId, snapshotId, options = {}) {
+    const limit = options.limit ?? PROCESS_DELETE_CHUNK_SIZE;
+    const prefix = processPrefix(tenantId, hostId, snapshotId);
+    const processKeys = [];
+    for (const storedKey of this.#state.processes.keys()) {
+      if (!storedKey.startsWith(prefix)) {
+        continue;
+      }
+      processKeys.push(storedKey.slice(prefix.length));
+      if (processKeys.length === limit) {
+        break;
+      }
+    }
+    return processKeys;
+  }
+
+  async deleteProcessChunk(tenantId, hostId, snapshotId, processKeys) {
+    if (processKeys.length > FIRESTORE_MAX_BATCH_WRITES) {
+      fail("BATCH_WRITE_LIMIT", `a write batch cannot exceed ${FIRESTORE_MAX_BATCH_WRITES} operations`);
+    }
+    const prefix = processPrefix(tenantId, hostId, snapshotId);
+    for (const processKey of processKeys) {
+      this.#state.processes.delete(prefix + processKey);
+    }
+    return processKeys.length;
+  }
+
   seedAgent(agent) {
     this.#state.agents.set(key(agent.tenantId, agent.agentId), clone(agent));
   }
@@ -35,61 +73,70 @@ export class InMemoryStore {
 }
 
 class InMemoryTransaction {
+  #state;
+  #writes = 0;
+  #written = false;
+
   constructor(state) {
-    this.state = state;
+    this.#state = state;
   }
 
   getAgent(tenantId, agentId) {
-    return clone(this.state.agents.get(key(tenantId, agentId)));
+    return this.#read(() => clone(this.#state.agents.get(key(tenantId, agentId))));
   }
 
   getHost(tenantId, hostId) {
-    return clone(this.state.hosts.get(key(tenantId, hostId)));
+    return this.#read(() => clone(this.#state.hosts.get(key(tenantId, hostId))));
   }
 
   setHost(host) {
-    this.state.hosts.set(key(host.tenantId, host.hostId), clone(host));
+    this.#write(() => {
+      this.#state.hosts.set(key(host.tenantId, host.hostId), clone(host));
+    });
   }
 
   getGeneration(tenantId, hostId, snapshotId) {
-    return clone(this.state.generations.get(key(tenantId, hostId, snapshotId)));
+    return this.#read(() => clone(this.#state.generations.get(key(tenantId, hostId, snapshotId))));
   }
 
   setGeneration(generation) {
-    this.state.generations.set(
-      key(generation.tenantId, generation.hostId, generation.snapshotId),
-      clone(generation)
-    );
+    this.#write(() => {
+      this.#state.generations.set(
+        key(generation.tenantId, generation.hostId, generation.snapshotId),
+        clone(generation)
+      );
+    });
   }
 
   deleteGeneration(tenantId, hostId, snapshotId) {
-    this.state.generations.delete(key(tenantId, hostId, snapshotId));
+    this.#write(() => {
+      this.#state.generations.delete(key(tenantId, hostId, snapshotId));
+    });
   }
 
-  setProcess(tenantId, hostId, snapshotId, process) {
-    this.state.processes.set(
-      key(tenantId, hostId, snapshotId, process.processKey),
-      clone(process)
-    );
-  }
-
-  getProcess(tenantId, hostId, snapshotId, processKey) {
-    return clone(this.state.processes.get(key(tenantId, hostId, snapshotId, processKey)));
-  }
-
-  listProcesses(tenantId, hostId, snapshotId) {
-    const prefix = `${key(tenantId, hostId, snapshotId)}/`;
-    return [...this.state.processes.entries()]
-      .filter(([processKey]) => processKey.startsWith(prefix))
-      .map(([, process]) => clone(process));
-  }
-
-  deleteProcesses(tenantId, hostId, snapshotId) {
-    const prefix = `${key(tenantId, hostId, snapshotId)}/`;
-    for (const processKey of this.state.processes.keys()) {
-      if (processKey.startsWith(prefix)) {
-        this.state.processes.delete(processKey);
+  createProcess(tenantId, hostId, snapshotId, process) {
+    const processKey = key(tenantId, hostId, snapshotId, process.processKey);
+    this.#write(() => {
+      if (this.#state.processes.has(processKey)) {
+        fail("PROCESS_KEY_CONFLICT", "process keys are immutable within a generation");
       }
+      this.#state.processes.set(processKey, clone(process));
+    });
+  }
+
+  #read(operation) {
+    if (this.#written) {
+      fail("TRANSACTION_READ_AFTER_WRITE", "all transaction reads must precede transaction writes");
     }
+    return operation();
+  }
+
+  #write(operation) {
+    this.#written = true;
+    this.#writes += 1;
+    if (this.#writes > FIRESTORE_MAX_TRANSACTION_WRITES) {
+      fail("TRANSACTION_WRITE_LIMIT", `a transaction cannot exceed ${FIRESTORE_MAX_TRANSACTION_WRITES} writes`);
+    }
+    operation();
   }
 }

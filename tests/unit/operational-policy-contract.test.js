@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import {
+  FIRESTORE_MAX_BATCH_WRITES,
+  FIRESTORE_MAX_TRANSACTION_WRITES,
+  PROCESS_DELETE_CHUNK_SIZE
+} from "../../collector-api/src/repository/limits.js";
 
 const root = new URL("../../", import.meta.url);
 
@@ -25,6 +30,13 @@ test("snapshot policy stays within the documented MVP boundaries", async () => {
   assert.ok(policy.snapshot.firestoreProcessBatchSize <= 500);
   assert.equal(policy.snapshot.overflowPolicy, "reject-413");
   assert.deepEqual(policy.snapshot.allowedContentEncodings, ["identity", "gzip"]);
+});
+
+test("repository limits stay inside firestore transaction and batch boundaries", async () => {
+  const policy = await readJson("contracts/operational-policy-v1.json");
+  assert.equal(PROCESS_DELETE_CHUNK_SIZE, policy.snapshot.firestoreProcessBatchSize);
+  assert.ok(PROCESS_DELETE_CHUNK_SIZE <= FIRESTORE_MAX_BATCH_WRITES);
+  assert.ok(policy.snapshot.firestoreProcessBatchSize + 1 <= FIRESTORE_MAX_TRANSACTION_WRITES);
 });
 
 test("collector-api env defaults match operational policy", async () => {
