@@ -49,12 +49,16 @@ export class InMemoryStore {
   }
 
   async findAgent(agentId) {
+    const matches = [];
     for (const agent of this.#state.agents.values()) {
       if (agent.agentId === agentId) {
-        return clone(agent);
+        matches.push(agent);
+      }
+      if (matches.length > 1) {
+        fail("AGENT_ID_NOT_UNIQUE", "agent id resolves to more than one tenant");
       }
     }
-    return undefined;
+    return matches.length === 1 ? clone(matches[0]) : undefined;
   }
 
   async readHost(tenantId, hostId) {
@@ -114,25 +118,25 @@ class InMemoryTransaction {
     this.#state = state;
   }
 
-  getAgent(tenantId, agentId) {
+  async getAgent(tenantId, agentId) {
     return this.#read(() => clone(this.#state.agents.get(key(tenantId, agentId))));
   }
 
-  getHost(tenantId, hostId) {
+  async getHost(tenantId, hostId) {
     return this.#read(() => clone(this.#state.hosts.get(key(tenantId, hostId))));
   }
 
-  setHost(host) {
+  async setHost(host) {
     this.#write(() => {
       this.#state.hosts.set(key(host.tenantId, host.hostId), clone(host));
     });
   }
 
-  getGeneration(tenantId, hostId, snapshotId) {
+  async getGeneration(tenantId, hostId, snapshotId) {
     return this.#read(() => clone(this.#state.generations.get(key(tenantId, hostId, snapshotId))));
   }
 
-  setGeneration(generation) {
+  async setGeneration(generation) {
     this.#write(() => {
       this.#state.generations.set(
         key(generation.tenantId, generation.hostId, generation.snapshotId),
@@ -141,13 +145,13 @@ class InMemoryTransaction {
     });
   }
 
-  deleteGeneration(tenantId, hostId, snapshotId) {
+  async deleteGeneration(tenantId, hostId, snapshotId) {
     this.#write(() => {
       this.#state.generations.delete(key(tenantId, hostId, snapshotId));
     });
   }
 
-  createProcess(tenantId, hostId, snapshotId, process) {
+  async createProcess(tenantId, hostId, snapshotId, process) {
     const processKey = key(tenantId, hostId, snapshotId, process.processKey);
     this.#write(() => {
       if (this.#state.processes.has(processKey)) {

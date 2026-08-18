@@ -65,7 +65,7 @@ export class SnapshotService {
     };
 
     const bodySha256 = bodyDigest(wireBody);
-    const agent = await this.store.findAgent(auth.agentId);
+    const agent = await this.#findAgent(auth.agentId);
     if (!agent) {
       reject(401, "UNKNOWN_AGENT", "agent is not registered");
     }
@@ -161,6 +161,17 @@ export class SnapshotService {
     } catch (error) {
       if (error instanceof RepositoryError) {
         throw new ApiError(statusForRepositoryCode(error.code), error.code, error.message);
+      }
+      throw error;
+    }
+  }
+
+  async #findAgent(agentId) {
+    try {
+      return await this.store.findAgent(agentId);
+    } catch (error) {
+      if (error instanceof RepositoryError && error.code === "AGENT_ID_NOT_UNIQUE") {
+        reject(503, "AGENT_ID_NOT_UNIQUE", "agent id resolves to more than one tenant");
       }
       throw error;
     }

@@ -159,6 +159,22 @@ test("rejects unregistered agents, unknown key ids, and revoked keys", async (t)
   assert.equal(revoked.body.code, "REVOKED_KEY");
 });
 
+test("fails closed when an agent id is registered in more than one tenant", async (t) => {
+  const { app, origin, keyPair } = await startApp(t);
+  app.store.seedAgent({
+    tenantId: "tenant-b",
+    hostId: "host-9",
+    agentId: AGENT_ID,
+    quarantined: false,
+    keys: { [KID]: { publicKey: keyPair.publicKeyBase64url, revokedAt: null } }
+  });
+
+  const pushed = await push({ origin, keyPair, wireBody: snapshotBody() });
+
+  assert.equal(pushed.response.status, 503);
+  assert.equal(pushed.body.code, "AGENT_ID_NOT_UNIQUE");
+});
+
 test("rejects a timestamp outside the allowed clock skew", async (t) => {
   const { origin, keyPair } = await startApp(t);
   const stale = rfc3339(new Date(Date.now() - 10 * 60 * 1000));

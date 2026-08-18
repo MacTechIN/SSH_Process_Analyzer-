@@ -17,6 +17,12 @@ replayRecords/{sha256(agentId + LF + kid + LF + nonce)}
 
 host 문서의 `publishedGeneration` 포인터가 가리키는 generation만 웹의 현재 상태로 취급한다. generation은 `staging`, `failed-retryable`, `ready`, `publishing`, `published`, `deleting` 상태를 가진다.
 
+## agent 식별자
+
+서명 계약은 `agentId`만 전달하고 `tenantId`는 전달하지 않는다. 따라서 서버는 `agentId` 하나로 tenant를 결정해야 하며, **`agentId`는 모든 tenant를 통틀어 유일**해야 한다.
+
+같은 `agentId`가 두 tenant에 등록되면 조회가 임의의 문서를 고를 수 있으므로 저장소는 fail-closed로 처리한다. API는 `AGENT_ID_NOT_UNIQUE`와 HTTP `503`으로 응답하고, collector는 재시도 가능한 실패로 보고 spool에 보관한다. 운영자가 중복 등록을 정리하면 다음 재전송에서 복구된다.
+
 ## 사용자와 작업
 
 - 화면 사용자 이름과 사용자별 통계 기준은 process의 `ownerName`이다.

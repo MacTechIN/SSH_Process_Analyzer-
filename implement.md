@@ -364,5 +364,7 @@ Figma Make에서 UI 생성
 - Phase 3 collector-api vertical slice 완료. in-memory 저장소 위에서 서명 검증, replay 차단, schema 검증, generation publish 동작
 - Phase 4 collector 완료. `/proc` 수집, 마스킹, 서명 push, bounded retry, spool, 중복 실행 방지, systemd unit 제공
 - `installationInstanceId`는 collector가 생성하고 보관하지만 전송하지 않는다. snapshot schema v1과 서명 header에 자리가 없어 clone 판정은 계약 확장 후 가능하다
-- 다음 작업: Firebase SDK adapter와 emulator 통합 테스트, snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job
+- Firebase SDK adapter와 Firestore replay 저장소 완료. emulator에서 repository 시나리오와 API 경로 검증
+- `agentId`는 서명 payload에 tenant 정보가 없으므로 전 tenant에서 유일해야 한다. 중복 등록은 fail-closed로 거부한다
+- 다음 작업: snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job, `expiresAt` TTL, Rules allow/deny matrix
 - emulator 통합 테스트와 Rules allow/deny matrix는 Firebase adapter와 웹 클라이언트 작업 시점에 수행

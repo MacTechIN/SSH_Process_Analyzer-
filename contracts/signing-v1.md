@@ -30,3 +30,5 @@ POST\n
 | Ed25519 signature | `X-Agent-Signature` | 고정 |
 
 `tenantId`와 `hostId`는 등록된 agent registry에서 서버가 결정한다. 요청 body나 header로 저장 경로를 선택하지 않는다.
+
+서명 payload에 `tenantId`가 없으므로 `agentId`는 모든 tenant를 통틀어 유일해야 한다. 중복 등록은 서버가 fail-closed로 거부한다.

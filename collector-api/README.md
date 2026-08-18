@@ -1,6 +1,13 @@
 # Collector API
 
-Cloud Run snapshot 수신 API다. 현재는 in-memory 저장소 위에서 동작하는 vertical slice이며 Firestore adapter는 아직 연결하지 않았다.
+Cloud Run snapshot 수신 API다. 저장소는 `STORAGE_DRIVER`로 고른다.
+
+| 값 | 동작 |
+| --- | --- |
+| `firestore` | Firebase Admin SDK로 Cloud Firestore에 저장한다. `GOOGLE_CLOUD_PROJECT`가 있으면 기본값이다 |
+| `memory` | 프로세스 메모리에 저장한다. 로컬 개발과 테스트 전용이며 재시작하면 사라진다 |
+
+`GOOGLE_CLOUD_PROJECT`가 비어 있으면 `memory`가 기본값이다.
 
 ## 엔드포인트
 
@@ -41,6 +48,7 @@ fail-closed 순서로 처리하며 앞 단계를 통과하지 못하면 뒤 단�
 | `409` | 동일 `snapshotId`의 다른 body hash, generation 상태 충돌 |
 | `413` | wire body, 압축 해제 body, process 수 상한 초과 |
 | `415` | 지원하지 않는 `Content-Encoding` |
+| `503` | replay 저장소 장애, `agentId`가 두 개 이상의 tenant에 등록된 registry 오류 |
 
 `X-Correlation-Id`는 형식이 맞으면 그대로, 아니면 서버 생성 UUID로 교체해 응답 header와 로그에 전달한다. 로그에는 서명, 헤더 원문, body를 기록하지 않는다.
 
@@ -53,23 +61,47 @@ src/snapshot-schema.js        snapshot v1 검증
 src/snapshot-service.js       수신 처리와 repository 4단계 호출
 src/server.js                 HTTP 라우팅, 크기 제한, 오류 매핑
 src/in-memory-replay-store.js replay create-only 저장소
+src/firestore-replay-store.js Firestore replay create-only 저장소
+src/repository/firestore-store.js  Firestore transaction adapter
 src/repository/               generation 상태 전이와 in-memory transaction adapter
 scripts/smoke.mjs             서명 push와 current 조회를 한 번에 확인하는 스크립트
 ```
+
+## Firestore 경로
+
+```text
+tenants/{tenantId}/agents/{agentId}
+tenants/{tenantId}/hosts/{hostId}
+tenants/{tenantId}/hosts/{hostId}/generations/{snapshotId}
+tenants/{tenantId}/hosts/{hostId}/generations/{snapshotId}/processes/{processKey}
+replayRecords/{sha256(agentId + LF + kid + LF + nonce)}
+```
+
+`agentId`로 tenant를 찾을 때는 `agents` collection group 질의를 쓴다. 서명 payload에 `tenantId`가 없으므로 `agentId`는 전 tenant에서 유일해야 하며, 둘 이상이 걸리면 fail-closed로 `503`을 반환한다.
 
 in-memory adapter는 Firestore 트랜잭션 제약을 그대로 강제한다. 트랜잭션의 모든 읽기는 모든 쓰기보다 앞서야 하고, 트랜잭션과 write batch는 각각 `500` write를 넘을 수 없다. process 재귀 삭제는 트랜잭션 밖에서 `limits.js`의 청크 크기로 나눠 수행한다. 이 제약을 지키면 Firebase SDK adapter는 동일 인터페이스 구현으로 교체할 수 있다.
 
 ## 실행
 
 ```bash
-npm start                      # agent registry가 비어 있으므로 모든 push는 401이다
+STORAGE_DRIVER=memory npm start        # 빈 registry로 기동한다. 등록된 agent가 없으므로 push는 401이다
 node collector-api/scripts/smoke.mjs   # 개발용 agent를 등록하고 전체 경로를 확인한다
 ```
 
+## 테스트
+
+```bash
+npm test              # in-memory 저장소 기준 unit과 integration
+npm run test:emulator # Firestore emulator 기준 repository와 API
+```
+
+repository 시나리오는 `tests/helpers/generation-scenarios.js` 하나로 관리하고 in-memory와 Firestore 양쪽에서 동일하게 실행한다.
+
 ## 미구현
 
-- Firebase SDK repository adapter와 Firestore replay record
 - agent 공개키 등록, 회전, 회수 절차와 registry 관리 API
 - snapshot history 조회 API와 Firebase Auth ID token 검증
 - host `lastAttemptAt`, error category 갱신과 quarantine 운영 절차
 - cleanup scheduled job
+- `expiresAt` TTL policy와 field index exemption 적용
+- Firestore Rules allow/deny matrix 테스트. 웹 클라이언트 작업 시점에 추가한다

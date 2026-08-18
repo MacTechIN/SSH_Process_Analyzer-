@@ -42,18 +42,22 @@ web/             React 웹앱
 
 ## 사용 흐름
 
-현재는 계약 정의 단계이므로 실행 가능한 애플리케이션은 아직 없다.
-
-구현 완료 후 기본 흐름은 다음과 같다.
-
 1. Linux 서버에 collector와 systemd timer를 설치한다.
 2. collector가 process snapshot을 수집하고 서명하여 API로 전송한다.
 3. API가 검증을 통과한 snapshot을 Firestore에 publish한다.
 4. 사용자는 웹 대시보드에서 OS process 소유주별 현재 작업과 통계를 확인한다.
 
+1번부터 3번까지는 동작한다. 4번 웹앱은 아직 구현하지 않았다.
+
+```bash
+npm test                              # in-memory 저장소 기준 unit과 integration
+npm run test:emulator                 # Firestore emulator 기준 repository와 API
+node collector/scripts/dev-run.mjs    # 임시 API에 실제 /proc 수집 결과를 push하고 조회한다
+```
+
 ## 개발 상태
 
-현재 단계: `Phase 4 - collector 구현`
+현재 단계: `Phase 2 완료 - Firestore adapter와 emulator 검증`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
@@ -67,9 +71,10 @@ web/             React 웹앱
 - 완료: Firestore 트랜잭션 제약을 저장소 인터페이스에 반영. 읽기 선행, 트랜잭션 `500` write 상한, 재귀 삭제 분리
 - 완료: collector-api vertical slice. Ed25519 서명 검증, replay 차단, snapshot v1 검증, generation publish, 현재 세대 조회
 - 완료: collector 구현. `/proc` 수집, 마스킹, 서명 push, bounded retry, spool, 중복 실행 방지, systemd unit
+- 완료: Firebase SDK repository adapter와 Firestore replay 저장소. emulator에서 동일 시나리오 검증
 - 외부 입력 필요: staging, production GCP/Firebase project ID
-- 진행 전: Firebase SDK 기반 repository adapter와 emulator 통합 테스트
-- 진행 전: snapshot history 조회 API, agent 키 등록/회전 절차, cleanup job, web 실제 구현
+- 진행 전: snapshot history 조회 API, agent 키 등록/회전 절차, cleanup job, `expiresAt` TTL, web 실제 구현
+- 진행 전: Firestore Rules allow/deny matrix. 웹 클라이언트 작업 시점에 수행
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
 운영 정책 기본값과 배포 전 외부 입력 항목은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
@@ -199,6 +204,22 @@ tests/
 - 검증: `node collector/scripts/dev-run.mjs`로 실제 `/proc` process `1,045`개를 수집해 서명 push, publish, 조회까지 확인
 - 미전송: `installationInstanceId`는 생성하고 보관하지만 schema v1과 서명 header에 자리가 없어 전송하지 않음. 서버 측 clone 판정은 계약 확장 후 가능
 - 남은 작업: Firebase adapter와 emulator 통합 테스트, snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job, web 구현
+
+### 2026-08-18 - v0.6.0
+
+- Firebase Admin SDK 기반 Firestore repository adapter와 replay 저장소 추가
+- `STORAGE_DRIVER`로 `firestore`와 `memory`를 선택. `GOOGLE_CLOUD_PROJECT`가 있으면 `firestore`가 기본값
+- Firestore 읽기가 비동기이므로 저장소 트랜잭션 인터페이스를 async로 통일하고 repository의 모든 읽기·쓰기를 await 처리
+- repository 시나리오를 `tests/helpers/generation-scenarios.js`로 분리해 in-memory와 Firestore 양쪽에서 동일하게 실행
+- emulator 기준 repository 시나리오 `15`개와 API 시나리오 `3`개 통과
+- `agentId`가 두 개 이상의 tenant에 등록되면 조회가 임의의 문서를 고르던 문제를 fail-closed로 수정. `AGENT_ID_NOT_UNIQUE`와 HTTP `503`으로 응답하며 collector는 spool에 보관 후 재시도
+- 서명 payload에 `tenantId`가 없으므로 `agentId`는 전 tenant에서 유일해야 한다는 제약을 계약 문서에 명시
+- Firestore emulator 포트를 `8085`, UI 포트를 `4400`으로 변경. 기본값 `8080`과 `4000`은 로컬 서비스와 충돌한다
+- `firebase-tools`를 `13.x`로 고정. `14` 이상은 JDK `21` 이상을 요구하고 현재 환경은 JDK `17`이다
+- spool 재전송 통합 테스트가 같은 초에 두 snapshot을 만들면 실패하던 문제 수정. 명시적 시계를 주입하고 동일 `capturedAt` 회귀 테스트를 추가
+- 테스트: `npm test` unit `52`개와 integration `19`개 합계 `71`개 성공
+- 테스트: `npm run test:emulator` Firestore emulator 기준 `18`개 성공
+- 남은 작업: snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job, `expiresAt` TTL, Rules matrix, web 구현
 
 ## 참고 문서
 

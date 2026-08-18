@@ -14,9 +14,9 @@ test("transaction reads after a write are rejected like firestore", async () => 
 
   await assert.rejects(
     () =>
-      store.transaction((tx) => {
-        tx.setHost({ tenantId: "tenant-a", hostId: "host-1" });
-        tx.getHost("tenant-a", "host-1");
+      store.transaction(async (tx) => {
+        await tx.setHost({ tenantId: "tenant-a", hostId: "host-1" });
+        await tx.getHost("tenant-a", "host-1");
       }),
     (error) => error.code === "TRANSACTION_READ_AFTER_WRITE"
   );
@@ -29,5 +29,16 @@ test("process delete chunks stay inside the firestore write batch limit", async 
   await assert.rejects(
     () => store.deleteProcessChunk("tenant-a", "host-1", "snapshot-1", processKeys),
     (error) => error.code === "BATCH_WRITE_LIMIT"
+  );
+});
+
+test("an agent id that resolves to more than one tenant fails closed", async () => {
+  const store = setup();
+  store.seedAgent({ tenantId: "tenant-a", hostId: "host-1", agentId: "agent_01" });
+  store.seedAgent({ tenantId: "tenant-b", hostId: "host-9", agentId: "agent_01" });
+
+  await assert.rejects(
+    () => store.findAgent("agent_01"),
+    (error) => error.code === "AGENT_ID_NOT_UNIQUE"
   );
 });

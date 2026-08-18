@@ -117,7 +117,8 @@ test("spools the exact wire body when the api is unreachable and resends it late
   const { origin, stateDir, config } = await setup(t);
   const offline = config({ API_BASE_URL: "http://127.0.0.1:1" });
 
-  const failed = await runOnce({ config: offline, log: () => {} });
+  const capturedAtMs = Date.now();
+  const failed = await runOnce({ config: offline, log: () => {}, nowMs: capturedAtMs });
   assert.equal(failed.pushed, false);
   assert.equal(failed.spooled, true);
 
@@ -127,7 +128,11 @@ test("spools the exact wire body when the api is unreachable and resends it late
   const spooledBytes = await spool.read(spooledEntry);
 
   const logs = [];
-  const recovered = await runOnce({ config: config(), log: (entry) => logs.push(entry) });
+  const recovered = await runOnce({
+    config: config(),
+    log: (entry) => logs.push(entry),
+    nowMs: capturedAtMs + 2000
+  });
   assert.equal(recovered.pushed, true);
   assert.equal(recovered.spool.resent, 1);
   assert.equal(collected(logs, "spool-resent").snapshotId, spooledEntry.snapshotId);
@@ -139,6 +144,23 @@ test("spools the exact wire body when the api is unreachable and resends it late
 
   const current = await (await fetch(`${origin}/v1/tenants/${TENANT_ID}/hosts/${HOST_ID}/current`)).json();
   assert.equal(current.snapshotId, recovered.snapshotId);
+});
+
+test("a resent snapshot captured in the same second does not move the current pointer", async (t) => {
+  const { origin, config } = await setup(t);
+  const capturedAtMs = Date.now();
+  const offline = config({ API_BASE_URL: "http://127.0.0.1:1" });
+
+  const spooledRun = await runOnce({ config: offline, log: () => {}, nowMs: capturedAtMs });
+  const [spooledEntry] = await new Spool(offline).list();
+  const recovered = await runOnce({ config: config(), log: () => {}, nowMs: capturedAtMs });
+
+  assert.equal(spooledRun.spooled, true);
+  assert.equal(recovered.pushed, true);
+  assert.notEqual(recovered.snapshotId, spooledEntry.snapshotId);
+
+  const current = await (await fetch(`${origin}/v1/tenants/${TENANT_ID}/hosts/${HOST_ID}/current`)).json();
+  assert.equal(current.snapshotId, spooledEntry.snapshotId);
 });
 
 test("drops a spooled snapshot the api permanently rejects", async (t) => {

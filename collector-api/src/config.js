@@ -17,8 +17,12 @@ function number(env, name, fallback) {
 }
 
 export function createConfig(env = process.env, policy = operationalPolicy) {
+  const projectId = env.GOOGLE_CLOUD_PROJECT ?? "";
   return {
     port: number(env, "PORT", 8080),
+    storageDriver: env.STORAGE_DRIVER ?? (projectId ? "firestore" : "memory"),
+    projectId,
+    databaseId: env.FIRESTORE_DATABASE_ID ?? "(default)",
     maxWireBodyBytes: number(env, "MAX_WIRE_BODY_BYTES", policy.snapshot.maxWireBodyBytes),
     maxDecompressedBodyBytes: number(
       env,

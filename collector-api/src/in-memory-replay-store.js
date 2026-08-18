@@ -1,10 +1,4 @@
-export class ReplayConflictError extends Error {
-  constructor() {
-    super("replay record already exists");
-    this.name = "ReplayConflictError";
-    this.code = "REPLAY_DETECTED";
-  }
-}
+import { ReplayConflictError } from "./replay-store-errors.js";
 
 export class InMemoryReplayStore {
   #records = new Map();

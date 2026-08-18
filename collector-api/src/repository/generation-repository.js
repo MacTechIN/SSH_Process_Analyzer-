@@ -18,8 +18,8 @@ export class GenerationRepository {
   }
 
   async beginSnapshot(input) {
-    return this.store.transaction((tx) => {
-      const existing = tx.getGeneration(input.tenantId, input.hostId, input.snapshotId);
+    return this.store.transaction(async (tx) => {
+      const existing = await tx.getGeneration(input.tenantId, input.hostId, input.snapshotId);
       if (existing) {
         if (existing.bodyHash !== input.bodyHash) {
           fail("SNAPSHOT_HASH_CONFLICT", "snapshotId already exists with a different body hash");
@@ -44,14 +44,14 @@ export class GenerationRepository {
         status: "staging",
         resumeLeaseUntil: input.resumeLeaseUntil ?? null
       };
-      tx.setGeneration(generation);
+      await tx.setGeneration(generation);
       return { generation, resumed: false };
     });
   }
 
   async stageBatch(input) {
-    return this.store.transaction((tx) => {
-      const generation = this.#requiredGeneration(tx, input);
+    return this.store.transaction(async (tx) => {
+      const generation = await this.#requiredGeneration(tx, input);
       if (!WRITABLE_STATES.has(generation.status)) {
         fail("GENERATION_NOT_STAGING", `cannot stage batch while generation is ${generation.status}`);
       }
@@ -63,20 +63,20 @@ export class GenerationRepository {
       }
 
       for (const process of input.processes) {
-        tx.createProcess(input.tenantId, input.hostId, input.snapshotId, process);
+        await tx.createProcess(input.tenantId, input.hostId, input.snapshotId, process);
       }
       generation.completedBatches.push(input.batchIndex);
       generation.completedBatches.sort((a, b) => a - b);
       generation.stagedProcessCount += input.processes.length;
       generation.status = "staging";
-      tx.setGeneration(generation);
+      await tx.setGeneration(generation);
       return { generation, staged: true };
     });
   }
 
   async markReady(input) {
-    return this.store.transaction((tx) => {
-      const generation = this.#requiredGeneration(tx, input);
+    return this.store.transaction(async (tx) => {
+      const generation = await this.#requiredGeneration(tx, input);
       if (generation.status === "deleting") {
         fail("GENERATION_DELETING", "generation is being deleted");
       }
@@ -91,16 +91,16 @@ export class GenerationRepository {
       }
       generation.status = "ready";
       generation.resumeLeaseUntil = null;
-      tx.setGeneration(generation);
+      await tx.setGeneration(generation);
       return generation;
     });
   }
 
   async publish(input) {
-    return this.store.transaction((tx) => {
-      const generation = this.#requiredGeneration(tx, input);
-      const agent = tx.getAgent(input.tenantId, input.agentId);
-      const host = tx.getHost(input.tenantId, input.hostId);
+    return this.store.transaction(async (tx) => {
+      const generation = await this.#requiredGeneration(tx, input);
+      const agent = await tx.getAgent(input.tenantId, input.agentId);
+      const host = await tx.getHost(input.tenantId, input.hostId);
 
       if (!sameBinding(agent, input.tenantId, input.hostId)) {
         fail("AGENT_BINDING_MISMATCH", "agent registry binding does not match tenant and host");
@@ -134,7 +134,7 @@ export class GenerationRepository {
         const comparison = generation.capturedAt.localeCompare(host.publishedCapturedAt);
         if (comparison < 0 || (comparison === 0 && host.publishedSnapshotId !== generation.snapshotId)) {
           generation.status = "published";
-          tx.setGeneration(generation);
+          await tx.setGeneration(generation);
           return { published: false, reason: "not-newer" };
         }
       }
@@ -142,17 +142,17 @@ export class GenerationRepository {
       host.publishedGeneration = generation.snapshotId;
       host.publishedSnapshotId = generation.snapshotId;
       host.publishedCapturedAt = generation.capturedAt;
-      tx.setHost(host);
+      await tx.setHost(host);
       generation.status = "published";
-      tx.setGeneration(generation);
+      await tx.setGeneration(generation);
       return { published: true, idempotent: false };
     });
   }
 
   async claimCleanup(input) {
-    return this.store.transaction((tx) => {
-      const generation = this.#requiredGeneration(tx, input);
-      const host = tx.getHost(input.tenantId, input.hostId);
+    return this.store.transaction(async (tx) => {
+      const generation = await this.#requiredGeneration(tx, input);
+      const host = await tx.getHost(input.tenantId, input.hostId);
       if (host?.publishedGeneration === input.snapshotId) {
         fail("CURRENT_GENERATION", "current generation cannot be cleaned up");
       }
@@ -166,15 +166,15 @@ export class GenerationRepository {
         fail("RESUME_LEASE_ACTIVE", "generation has an active resume lease");
       }
       generation.status = "deleting";
-      tx.setGeneration(generation);
+      await tx.setGeneration(generation);
       return { generation, idempotent: false };
     });
   }
 
   async finishCleanup(input) {
     const chunkSize = input.deleteChunkSize ?? PROCESS_DELETE_CHUNK_SIZE;
-    await this.store.transaction((tx) => {
-      this.#requireClaimed(tx, input);
+    await this.store.transaction(async (tx) => {
+      await this.#requireClaimed(tx, input);
     });
 
     let deletedProcessCount = 0;
@@ -192,16 +192,16 @@ export class GenerationRepository {
       deletedProcessCount += processKeys.length;
     }
 
-    await this.store.transaction((tx) => {
-      this.#requireClaimed(tx, input);
-      tx.deleteGeneration(input.tenantId, input.hostId, input.snapshotId);
+    await this.store.transaction(async (tx) => {
+      await this.#requireClaimed(tx, input);
+      await tx.deleteGeneration(input.tenantId, input.hostId, input.snapshotId);
     });
     return { deleted: true, deletedProcessCount };
   }
 
-  #requireClaimed(tx, input) {
-    const generation = this.#requiredGeneration(tx, input);
-    const host = tx.getHost(input.tenantId, input.hostId);
+  async #requireClaimed(tx, input) {
+    const generation = await this.#requiredGeneration(tx, input);
+    const host = await tx.getHost(input.tenantId, input.hostId);
     if (host?.publishedGeneration === input.snapshotId) {
       fail("CURRENT_GENERATION", "current generation cannot be cleaned up");
     }
@@ -211,8 +211,8 @@ export class GenerationRepository {
     return generation;
   }
 
-  #requiredGeneration(tx, input) {
-    const generation = tx.getGeneration(input.tenantId, input.hostId, input.snapshotId);
+  async #requiredGeneration(tx, input) {
+    const generation = await tx.getGeneration(input.tenantId, input.hostId, input.snapshotId);
     if (!generation) {
       fail("GENERATION_NOT_FOUND", "generation does not exist");
     }
