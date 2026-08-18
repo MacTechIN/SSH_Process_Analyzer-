@@ -6,3 +6,9 @@ dist/
 coverage/
 *.swp
 *~
+
+# firebase emulator artifacts
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
