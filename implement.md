@@ -366,5 +366,7 @@ Figma Make에서 UI 생성
 - `installationInstanceId`는 collector가 생성하고 보관하지만 전송하지 않는다. snapshot schema v1과 서명 header에 자리가 없어 clone 판정은 계약 확장 후 가능하다
 - Firebase SDK adapter와 Firestore replay 저장소 완료. emulator에서 repository 시나리오와 API 경로 검증
 - `agentId`는 서명 payload에 tenant 정보가 없으므로 전 tenant에서 유일해야 한다. 중복 등록은 fail-closed로 거부한다
-- 다음 작업: snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job, `expiresAt` TTL, Rules allow/deny matrix
+- snapshot history 조회 API, agent 키 관리 CLI, host 상태 메타데이터, cleanup job, `expiresAt` TTL, Rules allow/deny matrix 완료
+- Phase 2, 3, 4와 Phase 6의 로컬/emulator pre-staging gate 항목은 서버 측 범위에서 완료
+- 다음 작업: Phase 5 React 웹앱, Cloud Run 배포 매니페스트와 runtime service account IAM, staging 배포
 - emulator 통합 테스트와 Rules allow/deny matrix는 Firebase adapter와 웹 클라이언트 작업 시점에 수행

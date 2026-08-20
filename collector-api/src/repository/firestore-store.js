@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldPath, getFirestore } from "firebase-admin/firestore";
 import { RepositoryError, fail } from "./errors.js";
 import {
   FIRESTORE_MAX_BATCH_WRITES,
@@ -9,10 +9,11 @@ import {
 
 const ALREADY_EXISTS = 6;
 
-export function createFirestore({ projectId, databaseId }) {
-  const app =
-    getApps().find((candidate) => candidate.name === projectId) ??
-    initializeApp({ projectId }, projectId);
+export function createFirebaseApp({ projectId }) {
+  return getApps().find((candidate) => candidate.name === projectId) ?? initializeApp({ projectId }, projectId);
+}
+
+export function createFirestore({ projectId, databaseId, app = createFirebaseApp({ projectId }) }) {
   const firestore = getFirestore(app, databaseId ?? "(default)");
   try {
     firestore.settings({ ignoreUndefinedProperties: true });
@@ -23,6 +24,10 @@ export function createFirestore({ projectId, databaseId }) {
 }
 
 export class FirestoreStore {
+  // Firestore deletes expired snapshot history through a TTL policy on expiresAt,
+  // so the cleanup job only has to recurse into generations and their processes.
+  historyTtlManaged = true;
+
   constructor(firestore) {
     this.db = firestore;
   }
@@ -76,6 +81,72 @@ export class FirestoreStore {
     }
     await batch.commit();
     return processKeys.length;
+  }
+
+  snapshotRef(tenantId, hostId, snapshotId) {
+    return this.hostRef(tenantId, hostId).collection("snapshots").doc(snapshotId);
+  }
+
+  async listSnapshotHistory(tenantId, hostId, options = {}) {
+    let query = this.hostRef(tenantId, hostId)
+      .collection("snapshots")
+      .orderBy("capturedAt", "desc")
+      .orderBy(FieldPath.documentId(), "desc");
+    if (options.capturedAtFrom) {
+      query = query.where("capturedAt", ">=", options.capturedAtFrom);
+    }
+    if (options.startAfter) {
+      query = query.startAfter(options.startAfter.capturedAt, options.startAfter.snapshotId);
+    }
+    const snapshot = await query.limit(options.limit ?? 50).get();
+    return snapshot.docs.map((doc) => doc.data());
+  }
+
+  async listExpiredGenerations(nowIso, limit) {
+    const snapshot = await this.db
+      .collectionGroup("generations")
+      .where("expiresAt", "<=", nowIso)
+      .orderBy("expiresAt")
+      .limit(limit)
+      .get();
+    return snapshot.docs.map((doc) => doc.data());
+  }
+
+  async deleteSnapshotHistory(tenantId, hostId, snapshotIds) {
+    const batch = this.db.batch();
+    for (const snapshotId of snapshotIds) {
+      batch.delete(this.snapshotRef(tenantId, hostId, snapshotId));
+    }
+    await batch.commit();
+    return snapshotIds.length;
+  }
+
+  async readAgent(tenantId, agentId) {
+    const doc = await this.agentRef(tenantId, agentId).get();
+    return doc.exists ? doc.data() : undefined;
+  }
+
+  async readMembership(tenantId, uid) {
+    const doc = await this.db.doc(`tenants/${tenantId}/memberships/${uid}`).get();
+    return doc.exists ? doc.data() : undefined;
+  }
+
+  async appendAgentAudit(entry) {
+    await this.agentRef(entry.tenantId, entry.agentId).collection("auditLog").add(entry);
+    return entry;
+  }
+
+  async listAgentAudit(tenantId, agentId) {
+    const snapshot = await this.agentRef(tenantId, agentId).collection("auditLog").get();
+    return snapshot.docs.map((doc) => doc.data());
+  }
+
+  async seedSnapshotHistory(record) {
+    await this.snapshotRef(record.tenantId, record.hostId, record.snapshotId).set(record);
+  }
+
+  async seedMembership(membership) {
+    await this.db.doc(`tenants/${membership.tenantId}/memberships/${membership.uid}`).set(membership);
   }
 
   async findAgent(agentId) {
@@ -147,6 +218,15 @@ class FirestoreTransaction {
 
   async deleteGeneration(tenantId, hostId, snapshotId) {
     this.#write(() => this.#transaction.delete(this.#store.generationRef(tenantId, hostId, snapshotId)));
+  }
+
+  async setSnapshotHistory(record) {
+    this.#write(() =>
+      this.#transaction.set(
+        this.#store.snapshotRef(record.tenantId, record.hostId, record.snapshotId),
+        record
+      )
+    );
   }
 
   async createProcess(tenantId, hostId, snapshotId, process) {

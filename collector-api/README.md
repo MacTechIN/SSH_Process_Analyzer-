@@ -14,6 +14,7 @@ Cloud Run snapshot 수신 API다. 저장소는 `STORAGE_DRIVER`로 고른다.
 | Method | Path | 설명 |
 | --- | --- | --- |
 | `POST` | `/v1/snapshots` | 서명 검증, replay 차단, schema 검증 후 generation을 publish한다 |
+| `GET` | `/v1/tenants/{tenantId}/hosts/{hostId}/snapshots` | snapshot history 조회. Firebase Auth ID token과 membership이 필요하다. [docs/history-api.md](../docs/history-api.md) |
 | `GET` | `/v1/tenants/{tenantId}/hosts/{hostId}/current` | 현재 published generation 조회. `DEV_READ_API_ENABLED=true`일 때만 열린다 |
 | `GET` | `/healthz` | 상태 확인 |
 
@@ -48,7 +49,13 @@ fail-closed 순서로 처리하며 앞 단계를 통과하지 못하면 뒤 단�
 | `409` | 동일 `snapshotId`의 다른 body hash, generation 상태 충돌 |
 | `413` | wire body, 압축 해제 body, process 수 상한 초과 |
 | `415` | 지원하지 않는 `Content-Encoding` |
-| `503` | replay 저장소 장애, `agentId`가 두 개 이상의 tenant에 등록된 registry 오류 |
+| `503` | replay 저장소 장애, `agentId`가 두 개 이상의 tenant에 등록된 registry 오류, cursor 서명 secret 미설정 |
+
+## Host 상태 메타데이터
+
+인증과 registry binding을 통과한 요청만 host 문서의 `lastAttemptAt`, `lastOutcome`, `lastErrorCategory`, `lastSuccessAt`을 갱신한다. 인증 전 실패는 host 문서를 건드리지 않는다. 이 갱신은 publish 포인터를 절대 바꾸지 않으며, 실패해도 요청 응답을 바꾸지 않는다.
+
+`lastErrorCategory`는 `authentication`, `schema`, `size`, `captured-at`, `conflict`, `registry`, `storage`, `internal` 중 하나다. 구체적인 실패 메시지는 저장하지 않는다.
 
 `X-Correlation-Id`는 형식이 맞으면 그대로, 아니면 서버 생성 UUID로 교체해 응답 header와 로그에 전달한다. 로그에는 서명, 헤더 원문, body를 기록하지 않는다.
 
@@ -63,15 +70,24 @@ src/server.js                 HTTP 라우팅, 크기 제한, 오류 매핑
 src/in-memory-replay-store.js replay create-only 저장소
 src/firestore-replay-store.js Firestore replay create-only 저장소
 src/repository/firestore-store.js  Firestore transaction adapter
+src/history-service.js        snapshot history 조회와 membership 확인
+src/cursor.js                 history pagination cursor 서명과 검증
+src/agent-registry.js         agent 등록, 키 회전, 회수, quarantine
+src/cleanup-job.js            만료 generation 재귀 삭제
 src/repository/               generation 상태 전이와 in-memory transaction adapter
 scripts/smoke.mjs             서명 push와 current 조회를 한 번에 확인하는 스크립트
+scripts/agent-admin.mjs       agent registry 운영 CLI
+scripts/cleanup.mjs           cleanup job 진입점
 ```
 
 ## Firestore 경로
 
 ```text
+tenants/{tenantId}/memberships/{uid}
 tenants/{tenantId}/agents/{agentId}
+tenants/{tenantId}/agents/{agentId}/auditLog/{entryId}
 tenants/{tenantId}/hosts/{hostId}
+tenants/{tenantId}/hosts/{hostId}/snapshots/{snapshotId}
 tenants/{tenantId}/hosts/{hostId}/generations/{snapshotId}
 tenants/{tenantId}/hosts/{hostId}/generations/{snapshotId}/processes/{processKey}
 replayRecords/{sha256(agentId + LF + kid + LF + nonce)}
@@ -97,11 +113,19 @@ npm run test:emulator # Firestore emulator 기준 repository와 API
 
 repository 시나리오는 `tests/helpers/generation-scenarios.js` 하나로 관리하고 in-memory와 Firestore 양쪽에서 동일하게 실행한다.
 
+## 운영
+
+- [agent 키 관리 절차](../docs/agent-key-management.md)
+- [cleanup job과 TTL 정책](../docs/cleanup-and-ttl.md)
+- [snapshot history 조회 API](../docs/history-api.md)
+
+```bash
+node collector-api/scripts/agent-admin.mjs help   # agent 등록, 회전, 회수, quarantine
+node collector-api/scripts/cleanup.mjs            # 만료 generation 정리
+```
+
 ## 미구현
 
-- agent 공개키 등록, 회전, 회수 절차와 registry 관리 API
-- snapshot history 조회 API와 Firebase Auth ID token 검증
-- host `lastAttemptAt`, error category 갱신과 quarantine 운영 절차
-- cleanup scheduled job
-- `expiresAt` TTL policy와 field index exemption 적용
-- Firestore Rules allow/deny matrix 테스트. 웹 클라이언트 작업 시점에 추가한다
+- React 웹앱. Phase 5에서 구현한다
+- Cloud Run 배포 매니페스트와 runtime service account IAM 설정
+- `installationInstanceId` 전송. snapshot schema v1과 서명 header에 자리가 없어 계약 확장이 필요하다

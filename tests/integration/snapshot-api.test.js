@@ -175,6 +175,82 @@ test("fails closed when an agent id is registered in more than one tenant", asyn
   assert.equal(pushed.body.code, "AGENT_ID_NOT_UNIQUE");
 });
 
+test("records host attempt metadata for authenticated agents without touching the pointer", async (t) => {
+  const { app, origin, keyPair } = await startApp(t);
+
+  await push({ origin, keyPair, wireBody: snapshotBody() });
+  let host = await app.store.readHost(TENANT_ID, HOST_ID);
+  assert.equal(host.lastOutcome, "accepted");
+  assert.equal(host.lastErrorCategory, null);
+  assert.equal(host.lastSuccessAt, host.lastAttemptAt);
+  assert.equal(host.publishedGeneration, SNAPSHOT_ID);
+  const lastSuccessAt = host.lastSuccessAt;
+
+  const rejected = await push({
+    origin,
+    keyPair,
+    wireBody: snapshotBody({
+      snapshotId: "323e4567-e89b-42d3-a456-426614174000",
+      processes: [buildProcess(1, { ownerName: "alice bob" })]
+    })
+  });
+  assert.equal(rejected.response.status, 400);
+
+  host = await app.store.readHost(TENANT_ID, HOST_ID);
+  assert.equal(host.lastOutcome, "rejected");
+  assert.equal(host.lastErrorCategory, "schema");
+  assert.equal(host.lastSuccessAt, lastSuccessAt);
+  assert.equal(host.publishedGeneration, SNAPSHOT_ID);
+});
+
+test("leaves host metadata untouched when authentication fails", async (t) => {
+  const { app, origin, keyPair } = await startApp(t);
+  const wireBody = snapshotBody();
+
+  await fetch(`${origin}/v1/snapshots`, {
+    method: "POST",
+    headers: signedHeaders({
+      wireBody,
+      agentId: AGENT_ID,
+      kid: KID,
+      privateKey: createAgentKeyPair().privateKey,
+      timestamp: rfc3339(new Date()),
+      nonce: nonceHex()
+    }),
+    body: wireBody
+  });
+
+  const host = await app.store.readHost(TENANT_ID, HOST_ID);
+  assert.equal(host.lastAttemptAt, undefined);
+  assert.equal(host.lastOutcome, undefined);
+  assert.ok(keyPair.publicKeyBase64url);
+});
+
+test("writes snapshot history for accepted and superseded snapshots", async (t) => {
+  const { app, origin, keyPair } = await startApp(t);
+  const newer = snapshotBody({ capturedAt: rfc3339(new Date()) });
+  const older = snapshotBody({
+    snapshotId: "423e4567-e89b-42d3-a456-426614174000",
+    capturedAt: rfc3339(new Date(Date.now() - 5 * 60 * 1000)),
+    processes: [buildProcess(5)]
+  });
+
+  await push({ origin, keyPair, wireBody: newer });
+  await push({ origin, keyPair, wireBody: older });
+
+  const history = await app.store.listSnapshotHistory(TENANT_ID, HOST_ID, { limit: 10 });
+  assert.deepEqual(
+    history.map((record) => [record.snapshotId, record.published]),
+    [
+      [SNAPSHOT_ID, true],
+      ["423e4567-e89b-42d3-a456-426614174000", false]
+    ]
+  );
+  for (const record of history) {
+    assert.ok(record.expiresAt > record.capturedAt);
+  }
+});
+
 test("rejects a timestamp outside the allowed clock skew", async (t) => {
   const { origin, keyPair } = await startApp(t);
   const stale = rfc3339(new Date(Date.now() - 10 * 60 * 1000));

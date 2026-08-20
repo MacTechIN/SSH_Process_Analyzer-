@@ -8,6 +8,21 @@ function sameBinding(agent, tenantId, hostId) {
   return agent?.tenantId === tenantId && agent?.hostId === hostId;
 }
 
+function historyRecord(generation, published, storedAt) {
+  return {
+    tenantId: generation.tenantId,
+    hostId: generation.hostId,
+    snapshotId: generation.snapshotId,
+    agentId: generation.agentId,
+    capturedAt: generation.capturedAt,
+    expiresAt: generation.expiresAt ?? null,
+    processCount: generation.expectedProcessCount,
+    bodyHash: generation.bodyHash,
+    published,
+    storedAt: storedAt ?? null
+  };
+}
+
 function allBatchesComplete(generation) {
   return generation.completedBatches.length === generation.expectedBatchCount;
 }
@@ -41,6 +56,7 @@ export class GenerationRepository {
         expectedBatchCount: input.expectedBatchCount,
         completedBatches: [],
         stagedProcessCount: 0,
+        expiresAt: input.expiresAt ?? null,
         status: "staging",
         resumeLeaseUntil: input.resumeLeaseUntil ?? null
       };
@@ -135,6 +151,7 @@ export class GenerationRepository {
         if (comparison < 0 || (comparison === 0 && host.publishedSnapshotId !== generation.snapshotId)) {
           generation.status = "published";
           await tx.setGeneration(generation);
+          await tx.setSnapshotHistory(historyRecord(generation, false, input.storedAt));
           return { published: false, reason: "not-newer" };
         }
       }
@@ -145,7 +162,31 @@ export class GenerationRepository {
       await tx.setHost(host);
       generation.status = "published";
       await tx.setGeneration(generation);
+      await tx.setSnapshotHistory(historyRecord(generation, true, input.storedAt));
       return { published: true, idempotent: false };
+    });
+  }
+
+  async recordAttempt(input) {
+    return this.store.transaction(async (tx) => {
+      const agent = await tx.getAgent(input.tenantId, input.agentId);
+      const host = await tx.getHost(input.tenantId, input.hostId);
+      if (!sameBinding(agent, input.tenantId, input.hostId)) {
+        fail("AGENT_BINDING_MISMATCH", "agent registry binding does not match tenant and host");
+      }
+      if (!host) {
+        fail("HOST_NOT_FOUND", "host registry entry is required");
+      }
+
+      host.lastAttemptAt = input.at;
+      host.lastAttemptAgentId = input.agentId;
+      host.lastOutcome = input.outcome;
+      host.lastErrorCategory = input.errorCategory ?? null;
+      if (input.outcome === "accepted") {
+        host.lastSuccessAt = input.at;
+      }
+      await tx.setHost(host);
+      return host;
     });
   }
 

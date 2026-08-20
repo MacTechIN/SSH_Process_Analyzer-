@@ -45,6 +45,16 @@ export function createConfig(env = process.env, policy = operationalPolicy) {
       policy.security.capturedAtPastLimitSeconds
     ),
     snapshotRetentionSeconds: number(env, "SNAPSHOT_RETENTION_SECONDS", policy.snapshot.retentionSeconds),
-    devReadApiEnabled: env.DEV_READ_API_ENABLED === "true"
+    devReadApiEnabled: env.DEV_READ_API_ENABLED === "true",
+    historyPageSizeLimit: number(env, "HISTORY_PAGE_SIZE_LIMIT", 100),
+    historyCursorTtlSeconds: number(env, "HISTORY_CURSOR_TTL_SECONDS", 900),
+    cursorSigningSecret: env.CURSOR_SIGNING_SECRET ?? "",
+    cursorSigningKeyId: env.CURSOR_SIGNING_KEY_ID ?? "v1",
+    cleanup: {
+      intervalSeconds: number(env, "CLEANUP_INTERVAL_SECONDS", policy.cleanup.intervalSeconds),
+      maxGenerationsPerRun: number(env, "CLEANUP_MAX_GENERATIONS_PER_RUN", policy.cleanup.maxGenerationsPerRun),
+      timeoutSeconds: number(env, "CLEANUP_TIMEOUT_SECONDS", policy.cleanup.timeoutSeconds),
+      maxRetries: number(env, "CLEANUP_MAX_RETRIES", policy.cleanup.maxRetries)
+    }
   };
 }

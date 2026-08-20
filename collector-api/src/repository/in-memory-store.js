@@ -13,6 +13,10 @@ function key(...parts) {
   return parts.join("/");
 }
 
+function sortKey(record) {
+  return `${record.capturedAt}\u0000${record.snapshotId}`;
+}
+
 function processPrefix(tenantId, hostId, snapshotId) {
   return `${key(tenantId, hostId, snapshotId)}/`;
 }
@@ -22,7 +26,10 @@ export class InMemoryStore {
     agents: new Map(),
     hosts: new Map(),
     generations: new Map(),
-    processes: new Map()
+    processes: new Map(),
+    snapshots: new Map(),
+    memberships: new Map(),
+    agentAudit: []
   };
 
   async transaction(callback) {
@@ -96,6 +103,71 @@ export class InMemoryStore {
     return processKeys.length;
   }
 
+  async listSnapshotHistory(tenantId, hostId, options = {}) {
+    const limit = options.limit ?? 50;
+    const prefix = `${key(tenantId, hostId)}/`;
+    const records = [...this.#state.snapshots.entries()]
+      .filter(([storedKey]) => storedKey.startsWith(prefix))
+      .map(([, record]) => clone(record))
+      .filter((record) => !options.capturedAtFrom || record.capturedAt >= options.capturedAtFrom)
+      .sort((left, right) => sortKey(right).localeCompare(sortKey(left)));
+
+    const after = options.startAfter;
+    const remaining = after
+      ? records.filter((record) => sortKey(record).localeCompare(sortKey(after)) < 0)
+      : records;
+    return remaining.slice(0, limit);
+  }
+
+  async listExpiredGenerations(nowIso, limit) {
+    return [...this.#state.generations.values()]
+      .filter((generation) => generation.expiresAt && generation.expiresAt <= nowIso)
+      .sort((left, right) => left.expiresAt.localeCompare(right.expiresAt))
+      .slice(0, limit)
+      .map((generation) => clone(generation));
+  }
+
+  async listExpiredSnapshotHistory(nowIso, limit) {
+    return [...this.#state.snapshots.values()]
+      .filter((record) => record.expiresAt && record.expiresAt <= nowIso)
+      .slice(0, limit)
+      .map((record) => clone(record));
+  }
+
+  async deleteSnapshotHistory(tenantId, hostId, snapshotIds) {
+    for (const snapshotId of snapshotIds) {
+      this.#state.snapshots.delete(key(tenantId, hostId, snapshotId));
+    }
+    return snapshotIds.length;
+  }
+
+  async readAgent(tenantId, agentId) {
+    return clone(this.#state.agents.get(key(tenantId, agentId)));
+  }
+
+  async readMembership(tenantId, uid) {
+    return clone(this.#state.memberships.get(key(tenantId, uid)));
+  }
+
+  async appendAgentAudit(entry) {
+    this.#state.agentAudit.push(clone(entry));
+    return entry;
+  }
+
+  async listAgentAudit(tenantId, agentId) {
+    return this.#state.agentAudit
+      .filter((entry) => entry.tenantId === tenantId && entry.agentId === agentId)
+      .map((entry) => clone(entry));
+  }
+
+  seedSnapshotHistory(record) {
+    this.#state.snapshots.set(key(record.tenantId, record.hostId, record.snapshotId), clone(record));
+  }
+
+  seedMembership(membership) {
+    this.#state.memberships.set(key(membership.tenantId, membership.uid), clone(membership));
+  }
+
   seedAgent(agent) {
     this.#state.agents.set(key(agent.tenantId, agent.agentId), clone(agent));
   }
@@ -148,6 +220,15 @@ class InMemoryTransaction {
   async deleteGeneration(tenantId, hostId, snapshotId) {
     this.#write(() => {
       this.#state.generations.delete(key(tenantId, hostId, snapshotId));
+    });
+  }
+
+  async setSnapshotHistory(record) {
+    await this.#write(() => {
+      this.#state.snapshots.set(
+        key(record.tenantId, record.hostId, record.snapshotId),
+        clone(record)
+      );
     });
   }
 

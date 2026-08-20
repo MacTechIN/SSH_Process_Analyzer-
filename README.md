@@ -57,7 +57,7 @@ node collector/scripts/dev-run.mjs    # 임시 API에 실제 /proc 수집 결과
 
 ## 개발 상태
 
-현재 단계: `Phase 2 완료 - Firestore adapter와 emulator 검증`
+현재 단계: `Phase 5 - React 웹앱 구현 대기`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
@@ -72,9 +72,14 @@ node collector/scripts/dev-run.mjs    # 임시 API에 실제 /proc 수집 결과
 - 완료: collector-api vertical slice. Ed25519 서명 검증, replay 차단, snapshot v1 검증, generation publish, 현재 세대 조회
 - 완료: collector 구현. `/proc` 수집, 마스킹, 서명 push, bounded retry, spool, 중복 실행 방지, systemd unit
 - 완료: Firebase SDK repository adapter와 Firestore replay 저장소. emulator에서 동일 시나리오 검증
+- 완료: snapshot history 조회 API. Firebase Auth ID token 검증, membership 확인, 서명 cursor pagination
+- 완료: agent 등록, 키 회전, 회수, quarantine 운영 CLI와 감사 로그
+- 완료: host `lastAttemptAt`과 error category 갱신. publish 포인터와 분리
+- 완료: cleanup scheduled job과 `expiresAt` TTL 정책
+- 완료: Firestore Rules allow/deny matrix 테스트
 - 외부 입력 필요: staging, production GCP/Firebase project ID
-- 진행 전: snapshot history 조회 API, agent 키 등록/회전 절차, cleanup job, `expiresAt` TTL, web 실제 구현
-- 진행 전: Firestore Rules allow/deny matrix. 웹 클라이언트 작업 시점에 수행
+- 진행 전: Phase 5 React 웹앱
+- 진행 전: Cloud Run 배포 매니페스트와 service account IAM
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
 운영 정책 기본값과 배포 전 외부 입력 항목은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
@@ -221,6 +226,28 @@ tests/
 - 테스트: `npm run test:emulator` Firestore emulator 기준 `18`개 성공
 - 남은 작업: snapshot history 조회 API, agent 키 등록과 회전 절차, cleanup job, `expiresAt` TTL, Rules matrix, web 구현
 
+### 2026-08-18 - v0.7.0
+
+- snapshot history 조회 API 구현. `GET /v1/tenants/{tenantId}/hosts/{hostId}/snapshots`
+- Firebase Auth ID token을 검증하고 서버가 `tenants/{tenantId}/memberships/{uid}`를 읽어 권한을 판단. custom claims는 사용하지 않음
+- 미인증은 HTTP `401`, membership 없음은 HTTP `403`과 데이터 0건
+- pagination cursor를 HMAC-SHA256으로 서명. `uid`, `tenantId`, `hostId`, 정렬 기준, `pageSize`, `retentionCutoff`, 만료 시각, 마지막 문서 키를 매 요청에서 재검증
+- cursor가 페이지네이션 세션의 `retentionCutoff`를 고정하도록 구현. 요청마다 재계산하면 페이지 사이에서 조회 창이 움직여 행이 누락된다
+- `CURSOR_SIGNING_SECRET` 미설정 시 history API를 HTTP `503`으로 fail-closed 처리
+- snapshot history 문서를 publish transaction에서 기록. 포인터를 갱신하지 못한 오래된 snapshot도 `published:false`로 보존
+- `expiresAt`을 서버가 계산해 generation과 history 양쪽에 기록. TTL 삭제 지연 시에도 만료 문서를 응답에서 제외
+- agent registry 운영 모듈과 CLI 추가. 등록, 키 회전, 회수, quarantine, 해제와 감사 로그
+- 마지막 활성 키 회수 차단, `agentId` 전 tenant 유일성 강제, quarantine 해제 시 운영자와 사유 필수
+- host `lastAttemptAt`, `lastOutcome`, `lastErrorCategory`, `lastSuccessAt` 갱신 구현. 인증 전 실패는 host 문서를 변경하지 않고 publish 포인터도 바꾸지 않음
+- cleanup scheduled job 구현. 만료 generation을 claim 후 트랜잭션 밖 `400`건 청크로 재귀 삭제하며 current pointer, `ready`, `publishing`, 유효 resume lease는 건너뜀
+- Firestore Rules allow/deny matrix 테스트 추가. 미인증 거부, 비멤버 거부, tenant 교차 거부, 미publish generation 거부, history·agents·replayRecords 전면 거부, 웹 쓰기 전면 거부
+- `generations.expiresAt`과 `agents.agentId` collection group index 추가
+- 추가 파일: `collector-api/src/`의 `history-service.js`, `cursor.js`, `agent-registry.js`, `cleanup-job.js`, `scripts/agent-admin.mjs`, `scripts/cleanup.mjs`
+- 추가 문서: `docs/agent-key-management.md`, `docs/cleanup-and-ttl.md`, `docs/history-api.md`
+- 테스트: `npm test` unit `70`개와 integration `30`개 합계 `100`개 성공
+- 테스트: `npm run test:emulator` Firestore emulator 기준 `30`개 성공. repository `15`, API `3`, Rules matrix `8`, history·cleanup·registry `4`
+- 남은 작업: Phase 5 React 웹앱, Cloud Run 배포 매니페스트와 service account IAM
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)
@@ -229,3 +256,6 @@ tests/
 - [Canonical Signing v1](contracts/signing-v1.md)
 - [Analytics v1](contracts/analytics-v1.md)
 - [Operational Policy v1](contracts/operational-policy-v1.json)
+- [Agent 키 관리 절차](docs/agent-key-management.md)
+- [Cleanup job과 TTL 정책](docs/cleanup-and-ttl.md)
+- [Snapshot history 조회 API](docs/history-api.md)

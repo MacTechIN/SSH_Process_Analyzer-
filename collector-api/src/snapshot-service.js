@@ -37,6 +37,34 @@ function decodeBody(wireBody, contentEncoding, maxDecompressedBodyBytes) {
   return wireBody;
 }
 
+const ERROR_CATEGORIES = {
+  TIMESTAMP_OUT_OF_WINDOW: "authentication",
+  REPLAY_DETECTED: "authentication",
+  SCHEMA_INVALID: "schema",
+  BODY_NOT_JSON: "schema",
+  BODY_NOT_DECODABLE: "schema",
+  PROCESS_COUNT_EXCEEDED: "size",
+  DECOMPRESSED_BODY_TOO_LARGE: "size",
+  WIRE_BODY_TOO_LARGE: "size",
+  CAPTURED_AT_IN_FUTURE: "captured-at",
+  CAPTURED_AT_TOO_OLD: "captured-at",
+  SNAPSHOT_HASH_CONFLICT: "conflict",
+  PROCESS_KEY_CONFLICT: "conflict",
+  GENERATION_NOT_READY: "conflict",
+  GENERATION_NOT_STAGING: "conflict",
+  GENERATION_DELETING: "conflict",
+  BATCH_MANIFEST_INCOMPLETE: "conflict",
+  PROCESS_COUNT_MISMATCH: "conflict",
+  AGENT_QUARANTINED: "registry",
+  AGENT_BINDING_MISMATCH: "registry",
+  HOST_NOT_FOUND: "registry",
+  REPLAY_STORE_UNAVAILABLE: "storage"
+};
+
+function errorCategory(error) {
+  return ERROR_CATEGORIES[error?.code] ?? "internal";
+}
+
 function chunk(items, size) {
   const chunks = [];
   for (let index = 0; index < items.length; index += size) {
@@ -86,6 +114,17 @@ export class SnapshotService {
       reject(401, "INVALID_SIGNATURE", "signature does not match the canonical payload");
     }
 
+    try {
+      const result = await this.#ingestVerified({ auth, agent, wireBody, contentEncoding, bodySha256, receivedAt });
+      await this.#recordAttempt(agent, receivedAt, "accepted", null);
+      return result;
+    } catch (error) {
+      await this.#recordAttempt(agent, receivedAt, "rejected", errorCategory(error));
+      throw error;
+    }
+  }
+
+  async #ingestVerified({ auth, agent, wireBody, contentEncoding, bodySha256, receivedAt }) {
     this.#requireFreshTimestamp(auth.timestamp, receivedAt);
     await this.#recordReplay(auth, receivedAt);
 
@@ -104,6 +143,23 @@ export class SnapshotService {
     this.#requireCapturedAtInWindow(snapshot.capturedAt, receivedAt);
 
     return this.#storeSnapshot({ agent, snapshot, bodySha256, receivedAt });
+  }
+
+  // Host attempt metadata is written only for authenticated and bound agents, and it
+  // never touches the publish pointer. Failures here must not mask the ingest outcome.
+  async #recordAttempt(agent, receivedAt, outcome, category) {
+    try {
+      await this.repository.recordAttempt({
+        tenantId: agent.tenantId,
+        hostId: agent.hostId,
+        agentId: agent.agentId,
+        at: receivedAt.toISOString(),
+        outcome,
+        errorCategory: category
+      });
+    } catch {
+      // registry drift or storage failure must not change the response
+    }
   }
 
   async readCurrent({ tenantId, hostId }) {
@@ -127,6 +183,9 @@ export class SnapshotService {
 
   async #storeSnapshot({ agent, snapshot, bodySha256, receivedAt }) {
     const batches = chunk(snapshot.processes, this.config.processBatchSize);
+    const expiresAt = new Date(
+      receivedAt.getTime() + this.config.snapshotRetentionSeconds * 1000
+    ).toISOString();
     const input = {
       tenantId: agent.tenantId,
       hostId: agent.hostId,
@@ -135,7 +194,9 @@ export class SnapshotService {
       bodyHash: bodySha256,
       capturedAt: snapshot.capturedAt,
       expectedProcessCount: snapshot.processes.length,
-      expectedBatchCount: batches.length
+      expectedBatchCount: batches.length,
+      expiresAt,
+      storedAt: receivedAt.toISOString()
     };
 
     try {
@@ -153,9 +214,7 @@ export class SnapshotService {
         snapshotId: snapshot.snapshotId,
         capturedAt: snapshot.capturedAt,
         processCount: snapshot.processes.length,
-        expiresAt: new Date(
-          receivedAt.getTime() + this.config.snapshotRetentionSeconds * 1000
-        ).toISOString(),
+        expiresAt,
         ...published
       };
     } catch (error) {

@@ -4,6 +4,7 @@ import { ApiError } from "./api-error.js";
 
 const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
 const CURRENT_PATH_PATTERN = /^\/v1\/tenants\/([A-Za-z0-9_-]{1,128})\/hosts\/([A-Za-z0-9_-]{1,128})\/current$/;
+const HISTORY_PATH_PATTERN = /^\/v1\/tenants\/([A-Za-z0-9_-]{1,128})\/hosts\/([A-Za-z0-9_-]{1,128})\/snapshots$/;
 
 function correlationId(request) {
   const received = request.headers["x-correlation-id"];
@@ -44,10 +45,10 @@ function sendJson(response, status, payload, id, request) {
   });
 }
 
-export function createApiServer({ service, config, logger = () => {} }) {
+export function createApiServer({ service, historyService, config, logger = () => {} }) {
   return createServer((request, response) => {
     const id = correlationId(request);
-    handle(request, { service, config, id })
+    handle(request, { service, historyService, config, id })
       .then((result) => {
         logger({ correlationId: id, method: request.method, path: request.url, status: result.status });
         sendJson(response, result.status, result.body, id, request);
@@ -61,7 +62,7 @@ export function createApiServer({ service, config, logger = () => {} }) {
   });
 }
 
-async function handle(request, { service, config, id }) {
+async function handle(request, { service, historyService, config, id }) {
   const url = new URL(request.url, "http://collector-api.local");
 
   if (request.method === "POST" && url.pathname === "/v1/snapshots") {
@@ -80,6 +81,20 @@ async function handle(request, { service, config, id }) {
       correlationId: id
     });
     return { status: 200, body: result };
+  }
+
+  const history = historyService ? HISTORY_PATH_PATTERN.exec(url.pathname) : null;
+  if (request.method === "GET" && history) {
+    return {
+      status: 200,
+      body: await historyService.listSnapshots({
+        tenantId: history[1],
+        hostId: history[2],
+        authorization: request.headers.authorization,
+        cursor: url.searchParams.get("cursor") ?? undefined,
+        pageSize: url.searchParams.get("limit") ?? undefined
+      })
+    };
   }
 
   const current = config.devReadApiEnabled ? CURRENT_PATH_PATTERN.exec(url.pathname) : null;
