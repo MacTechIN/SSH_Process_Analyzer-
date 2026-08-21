@@ -47,17 +47,20 @@ web/             React 웹앱
 3. API가 검증을 통과한 snapshot을 Firestore에 publish한다.
 4. 사용자는 웹 대시보드에서 OS process 소유주별 현재 작업과 통계를 확인한다.
 
-1번부터 3번까지는 동작한다. 4번 웹앱은 아직 구현하지 않았다.
+네 단계 모두 구현되어 있다. 웹앱은 Firebase Spark 요금제 안에서 무료로 배포할 수 있으며 절차는
+[docs/deploy-web.md](docs/deploy-web.md)에 있다.
 
 ```bash
 npm test                              # in-memory 저장소 기준 unit과 integration
-npm run test:emulator                 # Firestore emulator 기준 repository와 API
+npm run test:emulator                 # Firestore emulator 기준 repository, API, Rules matrix
 node collector/scripts/dev-run.mjs    # 임시 API에 실제 /proc 수집 결과를 push하고 조회한다
+npm run build:web                     # 웹앱 프로덕션 번들
+npm run deploy:web                    # 빌드, 아티팩트 검사, Firebase Hosting 배포
 ```
 
 ## 개발 상태
 
-현재 단계: `Phase 5 - React 웹앱 구현 대기`
+현재 단계: `Phase 5 - React 웹앱 구현 완료, 배포 대기`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
@@ -78,7 +81,9 @@ node collector/scripts/dev-run.mjs    # 임시 API에 실제 /proc 수집 결과
 - 완료: cleanup scheduled job과 `expiresAt` TTL 정책
 - 완료: Firestore Rules allow/deny matrix 테스트
 - 외부 입력 필요: staging, production GCP/Firebase project ID
-- 진행 전: Phase 5 React 웹앱
+- 완료: Phase 5 React 웹앱. 현재 작업 현황, 통계, 서버 상태, 예외 작업, 설정 화면
+- 완료: Firebase Hosting 배포 설정과 아티팩트 비밀 정보 검사
+- 진행 전: 실제 Firebase 프로젝트 생성과 배포. `firebase login`과 project ID가 필요하다
 - 진행 전: Cloud Run 배포 매니페스트와 service account IAM
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
@@ -248,6 +253,27 @@ tests/
 - 테스트: `npm run test:emulator` Firestore emulator 기준 `30`개 성공. repository `15`, API `3`, Rules matrix `8`, history·cleanup·registry `4`
 - 남은 작업: Phase 5 React 웹앱, Cloud Run 배포 매니페스트와 service account IAM
 
+### 2026-08-21 - v0.8.0
+
+- Phase 5 React 웹앱 구현. Vite 번들, 의존성은 react, react-dom, firebase 세 개
+- Firebase Auth Google Sign-In 연동. 미인증, 권한 거부, empty, loading, 오류 상태를 각각 화면으로 처리
+- 첫 화면을 사람별 `현재 작업 현황`으로 구현. KPI 카드 `5`개, 사용자·작업 유형·서버·상태·실행 시간·검색 필터, 상세 drawer
+- 기본 정렬을 장시간 실행과 예외 상태 우선, 이후 CPU 내림차순으로 구현
+- 통계 화면 구현. 사용자별 작업 수, 작업 유형 점유율, 시간대별 시작 추이, 서버별 CPU·메모리 부하, 장시간 실행 Top `10`
+- 예외 작업 화면 구현. 장시간 실행, 중복 실행 의심, 미분류, 최근 수집 없는 서버의 작업
+- 서버 상태 화면에서 `마지막 정상 publish`, `API 수신 후 실패`, `stale/offline`을 분리해 표시
+- Snapshot History는 서버 조회 API를 사용하며 미설정 시 해당 화면만 안내를 표시하고 나머지는 정상 동작
+- 실시간 구독 대신 요청 시점 조회로 구현. 실시간 구독은 collector push마다 전체 process를 다시 읽어 Firestore 무료 할당량을 소진한다
+- 화면 로직을 `web/src/lib/`의 순수 함수로 분리하고 unit 테스트 `16`개 추가
+- Firebase Hosting 설정 추가. SPA rewrite, asset 캐시 헤더, `nosniff`, `DENY` frame, `no-referrer`
+- Hosting 아티팩트 검사 스크립트 추가. source map, `.env`, private key, service account JSON, 서버 secret 이름을 검사하고 배포를 중단
+- membership 부여 CLI 추가. 로그인만으로는 데이터가 보이지 않으며 membership 문서가 있어야 조회된다
+- 무료 배포 문서 추가. Firebase Spark 요금제 안에서 Hosting, Auth, Firestore를 쓰고 collector-api는 자체 장비에서 실행
+- 테스트: `npm test` unit `86`개와 integration `30`개 합계 `116`개 성공
+- 검증: `npm run build:web` 성공, `npm run verify:web` 아티팩트 검사 통과
+- 미검증: 브라우저 렌더링 확인은 Chrome이 로컬 preview 서버에 접근하지 못해 수행하지 못함. 번들에 화면 문자열이 포함된 것만 확인
+- 남은 작업: 실제 Firebase 프로젝트 생성과 배포, Cloud Run 배포 매니페스트, staging P0/E2E
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)
@@ -259,3 +285,4 @@ tests/
 - [Agent 키 관리 절차](docs/agent-key-management.md)
 - [Cleanup job과 TTL 정책](docs/cleanup-and-ttl.md)
 - [Snapshot history 조회 API](docs/history-api.md)
+- [웹앱 무료 배포](docs/deploy-web.md)

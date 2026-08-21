@@ -160,6 +160,11 @@ export class InMemoryStore {
       .map((entry) => clone(entry));
   }
 
+  seedTenant(tenant) {
+    this.#state.tenants = this.#state.tenants ?? new Map();
+    this.#state.tenants.set(tenant.tenantId, clone(tenant));
+  }
+
   seedSnapshotHistory(record) {
     this.#state.snapshots.set(key(record.tenantId, record.hostId, record.snapshotId), clone(record));
   }

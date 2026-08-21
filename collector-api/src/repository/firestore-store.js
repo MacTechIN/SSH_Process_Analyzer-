@@ -141,6 +141,10 @@ export class FirestoreStore {
     return snapshot.docs.map((doc) => doc.data());
   }
 
+  async seedTenant(tenant) {
+    await this.db.doc(`tenants/${tenant.tenantId}`).set(tenant, { merge: true });
+  }
+
   async seedSnapshotHistory(record) {
     await this.snapshotRef(record.tenantId, record.hostId, record.snapshotId).set(record);
   }

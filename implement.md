@@ -368,5 +368,7 @@ Figma Make에서 UI 생성
 - `agentId`는 서명 payload에 tenant 정보가 없으므로 전 tenant에서 유일해야 한다. 중복 등록은 fail-closed로 거부한다
 - snapshot history 조회 API, agent 키 관리 CLI, host 상태 메타데이터, cleanup job, `expiresAt` TTL, Rules allow/deny matrix 완료
 - Phase 2, 3, 4와 Phase 6의 로컬/emulator pre-staging gate 항목은 서버 측 범위에서 완료
-- 다음 작업: Phase 5 React 웹앱, Cloud Run 배포 매니페스트와 runtime service account IAM, staging 배포
+- Phase 5 React 웹앱 완료. Firebase Hosting 배포 설정과 아티팩트 검사 포함
+- 웹앱은 Firebase Spark 요금제 안에서 무료로 외부 공개할 수 있다. Cloud Run은 결제 계정이 필요하므로 무료 구성에서는 collector-api를 자체 장비에서 실행한다
+- 다음 작업: 실제 Firebase 프로젝트 생성과 배포, Cloud Run 배포 매니페스트와 runtime service account IAM, staging P0/E2E
 - emulator 통합 테스트와 Rules allow/deny matrix는 Firebase adapter와 웹 클라이언트 작업 시점에 수행
