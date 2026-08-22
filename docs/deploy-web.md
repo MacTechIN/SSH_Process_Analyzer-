@@ -23,13 +23,30 @@ firebase projects:create ssh-analyzer-staging    # 또는 콘솔에서 생성
 1. **Authentication → Sign-in method → Google** 사용 설정
 2. **Firestore Database** 생성. 위치는 `asia-northeast3`, 모드는 프로덕션
 
-웹 앱을 하나 등록하고(`</>` 아이콘) 표시되는 공개 설정값을 복사한다.
+웹 앱 등록은 CLI로도 된다.
+
+```bash
+firebase apps:create web "SSH Process Analyzer"
+firebase apps:sdkconfig WEB          # apiKey와 appId를 출력한다
+```
+
+Google 로그인 사용 설정과 Firestore 데이터베이스 생성은 CLI로 할 수 없고 콘솔에서만 가능하다.
 
 ## 2. 프로젝트 별칭 연결
 
-```bash
-firebase --config firebase/firebase.json use --add   # staging / production 별칭을 지정한다
+저장소 루트에 `.firebaserc`를 만든다. 이 파일은 `.gitignore` 대상이다. Phase 0 결정에 따라 실제
+project ID는 저장소에 커밋하지 않고 배포 환경에서만 둔다. 형식은 `.firebaserc.example`에 있다.
+
+```json
+{
+  "projects": {
+    "default": "ssh-analyzer-staging",
+    "production": "ssh-analyzer-production"
+  }
+}
 ```
+
+`firebase --config firebase/firebase.json use --add`로 만들어도 된다. 별칭 전환은 `firebase use production`이다.
 
 ## 3. Rules와 index 배포
 
@@ -48,7 +65,7 @@ VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=ssh-analyzer-staging.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=ssh-analyzer-staging
 VITE_FIREBASE_APP_ID=1:...:web:...
-VITE_TENANT_ID=acme
+VITE_TENANT_ID=default
 VITE_HISTORY_API_BASE_URL=
 ```
 
@@ -77,7 +94,7 @@ export GOOGLE_CLOUD_PROJECT=ssh-analyzer-staging
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 node collector-api/scripts/grant-membership.mjs \
-  --tenant acme --uid <firebase uid> --role viewer
+  --tenant default --uid <firebase uid> --role viewer
 ```
 
 service account 키는 콘솔의 **프로젝트 설정 → 서비스 계정**에서 만든다. 이 파일은 저장소에 넣지 않는다.
@@ -96,7 +113,7 @@ npm start
 
 # agent 등록은 docs/agent-key-management.md 참고
 node collector-api/scripts/agent-admin.mjs register \
-  --tenant acme --host web-01 --agent agent_web01 --kid key_01 \
+  --tenant default --host web-01 --agent agent_web01 --kid key_01 \
   --public-key <공개키> --actor ops@example.com
 ```
 

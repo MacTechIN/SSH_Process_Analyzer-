@@ -15,3 +15,7 @@ ui-debug.log
 
 # web build output
 web/dist/
+
+# local firebase project binding (project ids stay out of the repository)
+.firebaserc
+!.firebaserc.example
