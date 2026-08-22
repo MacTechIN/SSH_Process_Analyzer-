@@ -60,7 +60,7 @@ npm run deploy:web                    # 빌드, 아티팩트 검사, Firebase Ho
 
 ## 개발 상태
 
-현재 단계: `Phase 5 - React 웹앱 구현 완료, 배포 대기`
+현재 단계: `Phase 6 - staging 배포 완료, P0/E2E 검증 대기`
 
 - 완료: monorepo 기본 구조
 - 완료: snapshot JSON Schema v1
@@ -83,7 +83,7 @@ npm run deploy:web                    # 빌드, 아티팩트 검사, Firebase Ho
 - 외부 입력 필요: staging, production GCP/Firebase project ID
 - 완료: Phase 5 React 웹앱. 현재 작업 현황, 통계, 서버 상태, 예외 작업, 설정 화면
 - 완료: Firebase Hosting 배포 설정과 아티팩트 비밀 정보 검사
-- 진행 전: 실제 Firebase 프로젝트 생성과 배포. `firebase login`과 project ID가 필요하다
+- 완료: staging 배포. Firestore Rules와 index, Firebase Hosting 배포 후 공개 주소 확인
 - 진행 전: Cloud Run 배포 매니페스트와 service account IAM
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
@@ -273,6 +273,17 @@ tests/
 - 검증: `npm run build:web` 성공, `npm run verify:web` 아티팩트 검사 통과
 - 미검증: 브라우저 렌더링 확인은 Chrome이 로컬 preview 서버에 접근하지 못해 수행하지 못함. 번들에 화면 문자열이 포함된 것만 확인
 - 남은 작업: 실제 Firebase 프로젝트 생성과 배포, Cloud Run 배포 매니페스트, staging P0/E2E
+
+### 2026-08-22 - v0.8.1
+
+- staging Firebase 프로젝트에 첫 배포 수행. Firestore Rules와 index, Hosting 배포 완료
+- `firebase.json`을 저장소 루트로 이동. Hosting `public` 경로는 config 파일보다 상위에 둘 수 없다
+- 단일 필드 index를 `indexes` 배열에서 `fieldOverrides`로 이동. Firestore는 단일 필드 index를 자동 생성하므로 composite 배열에 넣으면 `400`으로 거부한다
+- collection group 질의에 필요한 `generations.expiresAt`과 `agents.agentId`는 `fieldOverrides`에서 `COLLECTION_GROUP` scope로 선언
+- Hosting 헤더 순서 수정. `/index.html` 규칙은 `/` 요청에 적용되지 않아 HTML이 `max-age=3600`으로 캐시되던 문제를 `**` 우선 규칙으로 해결
+- 배포 검증: HTML `no-cache`, asset `immutable`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, SPA rewrite 동작 확인
+- 테스트: `npm test` `116`개, `npm run test:emulator` `30`개 성공
+- 남은 작업: membership 부여, collector-api 연결, staging P0/E2E
 
 ## 참고 문서
 

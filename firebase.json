@@ -1,7 +1,7 @@
 {
   "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "rules": "firebase/firestore.rules",
+    "indexes": "firebase/firestore.indexes.json"
   },
   "emulators": {
     "firestore": {
@@ -13,7 +13,7 @@
     }
   },
   "hosting": {
-    "public": "../web/dist",
+    "public": "web/dist",
     "ignore": [
       "**/.*",
       "**/node_modules/**",
@@ -28,26 +28,12 @@
     ],
     "headers": [
       {
-        "source": "/assets/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=31536000, immutable"
-          }
-        ]
-      },
-      {
-        "source": "/index.html",
+        "source": "**",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "**",
-        "headers": [
+          },
           {
             "key": "X-Content-Type-Options",
             "value": "nosniff"
@@ -59,6 +45,15 @@
           {
             "key": "Referrer-Policy",
             "value": "no-referrer"
+          }
+        ]
+      },
+      {
+        "source": "/assets/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
           }
         ]
       }

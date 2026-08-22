@@ -46,7 +46,7 @@ project ID는 저장소에 커밋하지 않고 배포 환경에서만 둔다. �
 }
 ```
 
-`firebase --config firebase/firebase.json use --add`로 만들어도 된다. 별칭 전환은 `firebase use production`이다.
+`firebase use --add`로 만들어도 된다. `.firebaserc`는 `firebase.json`과 같은 위치, 즉 저장소 루트에 있어야 한다. 별칭 전환은 `firebase use production`이다.
 
 ## 3. Rules와 index 배포
 

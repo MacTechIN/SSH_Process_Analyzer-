@@ -1,6 +1,7 @@
 # Firebase
 
-Firestore Rules, index, emulator 설정을 둔다.
+Firestore Rules와 index 정의를 둔다. `firebase.json`과 `.firebaserc`는 저장소 루트에 있다.
+Hosting의 `public` 경로가 config 파일보다 상위에 있을 수 없어서 config를 루트로 옮겼다.
 
 ## Emulator
 
