@@ -20,6 +20,7 @@ export function createConfig(env = process.env, policy = operationalPolicy) {
   const projectId = env.GOOGLE_CLOUD_PROJECT ?? "";
   return {
     port: number(env, "PORT", 8080),
+    host: env.HOST ?? "0.0.0.0",
     storageDriver: env.STORAGE_DRIVER ?? (projectId ? "firestore" : "memory"),
     projectId,
     databaseId: env.FIRESTORE_DATABASE_ID ?? "(default)",

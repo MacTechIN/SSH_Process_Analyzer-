@@ -187,3 +187,21 @@ test("formatters stay readable for the table", () => {
   assert.equal(formatBytes(12 * 1048576), "12 MiB");
   assert.equal(formatPercent(12.345), "12.3%");
 });
+
+test("health thresholds scale with the deployment collection interval", async () => {
+  const { healthThresholdsFor } = await import("../../web/src/lib/policy.js");
+
+  assert.deepEqual(healthThresholdsFor(60), HEALTH);
+  assert.deepEqual(healthThresholdsFor(3600), {
+    staleAfterSeconds: 7200,
+    warnAfterSeconds: 18000,
+    offlineAfterSeconds: 54000
+  });
+  assert.deepEqual(healthThresholdsFor(undefined), HEALTH);
+  assert.deepEqual(healthThresholdsFor("not a number"), HEALTH);
+
+  const hourly = healthThresholdsFor(3600);
+  const oneHourStale = { lastSuccessAt: "2026-08-21T11:00:00Z" };
+  assert.equal(hostHealth(oneHourStale, NOW).state, "offline", "60초 기준에서는 오프라인");
+  assert.equal(hostHealth(oneHourStale, NOW, hourly).state, "online", "1시간 주기에서는 정상");
+});

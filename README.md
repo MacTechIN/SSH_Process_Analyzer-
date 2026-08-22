@@ -294,6 +294,18 @@ tests/
 - 테스트: `npm test` `116`개, `npm run test:emulator` `31`개 성공
 - 배포: Rules와 Hosting 재배포 완료
 
+### 2026-08-22 - v0.9.0
+
+- collector-api 바인딩 주소를 `HOST`로 설정 가능하게 변경. 기본값은 `0.0.0.0`이며 사설망 주소를 지정하면 LAN과 공인 인터페이스 노출을 막는다
+- 웹앱 health 임계값을 실제 수집 주기에 맞춰 확대하도록 변경. `VITE_COLLECT_INTERVAL_SECONDS`가 없으면 `60`초 기준을 그대로 쓴다
+- `60`초 기준 임계값을 `1`시간 주기 배포에 그대로 쓰면 모든 서버가 항상 오프라인으로 표시되는 문제를 해결
+- sudo 없이 사용자 systemd 유닛으로 collector를 설치하는 스크립트 추가. 키 생성과 유닛 설치 후 등록에 필요한 `hostId`, `agentId`, 공개키를 출력한다
+- 자체 장비 실행용 collector-api systemd unit 템플릿 추가
+- 운영 배포: collector-api를 사용자 systemd 서비스로 상시 실행하고 Tailscale 주소에만 바인딩. collector는 `1`시간 주기 타이머로 등록
+- 수집 주기와 Firestore 무료 쓰기 한도의 관계를 문서화. process `800`개 서버는 하루 약 `24`회가 상한이다
+- 테스트: `npm test` `117`개 성공
+- 남은 작업: 두 번째 수집 대상 서버 등록, staging P0/E2E
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)

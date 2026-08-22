@@ -82,6 +82,29 @@ AGENT_KEY_ID=key_01
 
 `tenantId`와 `hostId`는 서버가 agent registry에서 결정한다. collector가 지정하지 않는다.
 
+## sudo 없이 설치
+
+수집 대상 서버에 root 권한이 없거나 시스템 유닛을 만들기 어려우면 사용자 systemd 유닛으로 설치한다.
+
+```bash
+API_BASE_URL=http://<collector-api 주소>:8090 ./collector/scripts/install-user-units.sh
+```
+
+키 생성, 환경 파일, 유닛 파일까지 만들고 등록에 필요한 `hostId`, `agentId`, 공개키를 출력한다. private key는 그 서버를 벗어나지 않는다. 운영자가 agent를 등록한 뒤 타이머를 시작한다.
+
+로그아웃 후에도 수집을 유지하려면 linger가 필요하다.
+
+```bash
+loginctl show-user "$USER" -p Linger
+sudo loginctl enable-linger "$USER"
+```
+
+## 수집 주기와 비용
+
+Firestore 무료 한도는 쓰기 `20,000`회/일이다. 수집 1회에 process 문서 수만큼 쓰기가 발생하므로 process `800`개 서버는 하루 약 `24`회가 상한이다. 무료로 운용하려면 타이머 주기를 `1h` 이상으로 둔다.
+
+웹앱의 stale, warn, offline 임계값은 `60`초 수집을 기준으로 정의되어 있고, `VITE_COLLECT_INTERVAL_SECONDS`에 실제 주기를 넣으면 같은 비율로 확대된다. 이 값을 넣지 않으면 `1`시간 주기 서버가 항상 오프라인으로 표시된다.
+
 ## 개발 실행
 
 ```bash

@@ -68,9 +68,10 @@ function log(entry) {
 
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const app = createApp();
-  app.server.listen(app.config.port, () => {
+  app.server.listen(app.config.port, app.config.host, () => {
     log({
       event: "listening",
+      host: app.config.host,
       port: app.config.port,
       storageDriver: app.config.storageDriver,
       devReadApiEnabled: app.config.devReadApiEnabled

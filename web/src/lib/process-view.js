@@ -1,3 +1,4 @@
+import { HEALTH } from "./policy.js";
 import { duplicateSuspicionKey, duplicateSuspicionKeys, hostHealth, isLongRunning } from "./status.js";
 
 export const RUNTIME_BUCKETS = {
@@ -13,13 +14,13 @@ export const STATUS_FILTERS = {
   "host-degraded": { label: "최근 수집 없음", matches: (row) => row.hostState !== "online" }
 };
 
-export function buildRows({ processes, hosts = {}, nowMs }) {
+export function buildRows({ processes, hosts = {}, nowMs, thresholds = HEALTH }) {
   const duplicates = duplicateSuspicionKeys(processes);
   const health = new Map();
 
   return processes.map((process) => {
     if (!health.has(process.hostId)) {
-      health.set(process.hostId, hostHealth(hosts[process.hostId], nowMs));
+      health.set(process.hostId, hostHealth(hosts[process.hostId], nowMs, thresholds));
     }
     const hostState = health.get(process.hostId);
     const runtimeSeconds = process.startedAt ? (nowMs - Date.parse(process.startedAt)) / 1000 : null;
@@ -110,9 +111,9 @@ export function paginate(rows, { page = 1, pageSize = 25 } = {}) {
   };
 }
 
-export function computeKpis(rows, hosts = {}, nowMs) {
+export function computeKpis(rows, hosts = {}, nowMs, thresholds = HEALTH) {
   const degradedHosts = Object.values(hosts).filter(
-    (host) => hostHealth(host, nowMs).state !== "online"
+    (host) => hostHealth(host, nowMs, thresholds).state !== "online"
   ).length;
 
   return {

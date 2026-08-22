@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, doc, getDoc, getDocs, limit, query } from "firebase/firestore";
 import { db } from "../firebase.js";
+import { HEALTH } from "../lib/policy.js";
 import { buildRows } from "../lib/process-view.js";
 
 const MAX_PROCESSES_PER_HOST = 2000;
 
 // Reads are pulled on demand rather than streamed. A live subscription would re-read every
 // process document on each collector push, which burns through the Firestore free tier.
-export function useTenantData({ user, tenantId, refreshIntervalSeconds }) {
+export function useTenantData({ user, tenantId, refreshIntervalSeconds, thresholds = HEALTH }) {
   const [state, setState] = useState({ status: "idle", hosts: {}, processes: [], error: null });
   const [loadedAt, setLoadedAt] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -84,9 +85,9 @@ export function useTenantData({ user, tenantId, refreshIntervalSeconds }) {
   }, []);
 
   const rows = useMemo(
-    () => buildRows({ processes: state.processes, hosts: state.hosts, nowMs }),
-    [state.processes, state.hosts, nowMs]
+    () => buildRows({ processes: state.processes, hosts: state.hosts, nowMs, thresholds }),
+    [state.processes, state.hosts, nowMs, thresholds]
   );
 
-  return { ...state, rows, nowMs, loadedAt, reload: load };
+  return { ...state, rows, nowMs, loadedAt, thresholds, reload: load };
 }

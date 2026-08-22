@@ -78,6 +78,8 @@ src/repository/               generation 상태 전이와 in-memory transaction 
 scripts/smoke.mjs             서명 push와 current 조회를 한 번에 확인하는 스크립트
 scripts/agent-admin.mjs       agent registry 운영 CLI
 scripts/cleanup.mjs           cleanup job 진입점
+scripts/grant-membership.mjs  tenant와 membership 생성
+systemd/                      Cloud Run 대신 자체 장비에서 실행할 때 쓰는 unit
 ```
 
 ## Firestore 경로
@@ -96,6 +98,15 @@ replayRecords/{sha256(agentId + LF + kid + LF + nonce)}
 `agentId`로 tenant를 찾을 때는 `agents` collection group 질의를 쓴다. 서명 payload에 `tenantId`가 없으므로 `agentId`는 전 tenant에서 유일해야 하며, 둘 이상이 걸리면 fail-closed로 `503`을 반환한다.
 
 in-memory adapter는 Firestore 트랜잭션 제약을 그대로 강제한다. 트랜잭션의 모든 읽기는 모든 쓰기보다 앞서야 하고, 트랜잭션과 write batch는 각각 `500` write를 넘을 수 없다. process 재귀 삭제는 트랜잭션 밖에서 `limits.js`의 청크 크기로 나눠 수행한다. 이 제약을 지키면 Firebase SDK adapter는 동일 인터페이스 구현으로 교체할 수 있다.
+
+## 바인딩
+
+`HOST`로 수신 주소를 정한다. 기본값 `0.0.0.0`은 모든 인터페이스를 연다. Tailscale 같은 사설망 위에서만 쓰려면 그 주소를 지정해 LAN과 공인 인터페이스 노출을 막는다.
+
+```text
+HOST=100.83.34.122
+PORT=8090
+```
 
 ## 실행
 

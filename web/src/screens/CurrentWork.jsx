@@ -5,13 +5,16 @@ import { ProcessDrawer } from "../components/ProcessDrawer.jsx";
 import { ProcessTable } from "../components/ProcessTable.jsx";
 import { computeKpis, filterRows, paginate, sortRows } from "../lib/process-view.js";
 
-export function CurrentWork({ rows, hosts, nowMs }) {
+export function CurrentWork({ rows, hosts, nowMs, thresholds }) {
   const [filters, setFilters] = useState({});
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
 
   const sorted = useMemo(() => sortRows(filterRows(rows, filters)), [rows, filters]);
-  const kpis = useMemo(() => computeKpis(rows, hosts, nowMs), [rows, hosts, nowMs]);
+  const kpis = useMemo(
+    () => computeKpis(rows, hosts, nowMs, thresholds),
+    [rows, hosts, nowMs, thresholds]
+  );
   const pageData = paginate(sorted, { page, pageSize: 25 });
 
   return (

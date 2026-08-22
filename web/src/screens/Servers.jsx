@@ -73,7 +73,7 @@ function HistoryPanel({ user, tenantId, hostId }) {
   );
 }
 
-export function Servers({ rows, hosts, nowMs, user, tenantId, role }) {
+export function Servers({ rows, hosts, nowMs, user, tenantId, role, thresholds }) {
   const [selected, setSelected] = useState(null);
   const load = Object.fromEntries(hostLoad(rows).map((entry) => [entry.key, entry]));
   const hostIds = Object.keys(hosts).sort();
@@ -100,7 +100,7 @@ export function Servers({ rows, hosts, nowMs, user, tenantId, role }) {
             </thead>
             <tbody>
               {hostIds.map((hostId) => {
-                const health = hostHealth(hosts[hostId], nowMs);
+                const health = hostHealth(hosts[hostId], nowMs, thresholds);
                 const hostLoadEntry = load[hostId];
                 return (
                   <tr

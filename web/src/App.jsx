@@ -8,6 +8,7 @@ import { Servers } from "./screens/Servers.jsx";
 import { Settings } from "./screens/Settings.jsx";
 import { Statistics } from "./screens/Statistics.jsx";
 import { formatRelative } from "./lib/format.js";
+import { healthThresholdsFor } from "./lib/policy.js";
 
 const SCREENS = [
   { id: "current", label: "현재 작업 현황" },
@@ -43,7 +44,12 @@ export default function App() {
     localStorage.setItem("refreshIntervalSeconds", String(refreshIntervalSeconds));
   }, [refreshIntervalSeconds]);
 
-  const data = useTenantData({ user, tenantId, refreshIntervalSeconds });
+  const data = useTenantData({
+    user,
+    tenantId,
+    refreshIntervalSeconds,
+    thresholds: healthThresholdsFor(import.meta.env.VITE_COLLECT_INTERVAL_SECONDS)
+  });
 
   if (!firebaseConfigured) {
     return (
@@ -163,13 +169,16 @@ export default function App() {
   }
 
   const screens = {
-    current: <CurrentWork rows={data.rows} hosts={data.hosts} nowMs={data.nowMs} />,
+    current: (
+      <CurrentWork rows={data.rows} hosts={data.hosts} nowMs={data.nowMs} thresholds={data.thresholds} />
+    ),
     stats: <Statistics rows={data.rows} nowMs={data.nowMs} />,
     servers: (
       <Servers
         rows={data.rows}
         hosts={data.hosts}
         nowMs={data.nowMs}
+        thresholds={data.thresholds}
         user={user}
         tenantId={tenantId}
         role={data.role}
