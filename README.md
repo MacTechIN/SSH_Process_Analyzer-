@@ -285,6 +285,15 @@ tests/
 - 테스트: `npm test` `116`개, `npm run test:emulator` `30`개 성공
 - 남은 작업: membership 부여, collector-api 연결, staging P0/E2E
 
+### 2026-08-22 - v0.8.2
+
+- membership 조회 Rules의 순환 구조 수정. `isTenantMember()`가 읽으려는 문서의 존재를 확인하고 있어, membership이 없는 사용자는 빈 결과 대신 `permission-denied`를 받았다
+- 로그인한 사용자는 자신의 membership 문서를 존재 여부와 무관하게 읽을 수 있도록 변경. 노출되는 정보는 본인 role뿐이다
+- 웹앱이 `permission-denied`를 권한 없음 상태로 처리하도록 수정. 이전에는 일반 오류 화면이 떴다
+- emulator Rules matrix에 비멤버의 자기 membership 조회 허용과 미인증 거부 검증 추가
+- 테스트: `npm test` `116`개, `npm run test:emulator` `31`개 성공
+- 배포: Rules와 Hosting 재배포 완료
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)

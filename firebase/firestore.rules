@@ -20,8 +20,12 @@ service cloud.firestore {
       allow read: if isTenantMember(tenantId);
       allow write: if false;
 
+      // A signed in user may always read their own membership document, even when it does
+      // not exist. Gating this on isTenantMember() is circular: the helper checks for the
+      // very document being read, so a non member gets permission-denied instead of an
+      // empty result and the app cannot tell the two apart.
       match /memberships/{uid} {
-        allow read: if isTenantMember(tenantId) && request.auth.uid == uid;
+        allow read: if signedIn() && request.auth.uid == uid;
         allow write: if false;
       }
 

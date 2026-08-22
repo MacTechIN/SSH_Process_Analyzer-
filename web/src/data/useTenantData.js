@@ -58,6 +58,10 @@ export function useTenantData({ user, tenantId, refreshIntervalSeconds }) {
       setLoadedAt(Date.now());
       setNowMs(Date.now());
     } catch (error) {
+      if (error?.code === "permission-denied") {
+        setState({ status: "forbidden", hosts: {}, processes: [], error: null });
+        return;
+      }
       setState({ status: "error", hosts: {}, processes: [], error: error.code ?? error.message });
     }
   }, [user, tenantId]);

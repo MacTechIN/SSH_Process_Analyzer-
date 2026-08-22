@@ -102,6 +102,13 @@ test("membership documents are readable only by their own uid", options, async (
   await assertFails(getDoc(doc(member(), `tenants/${TENANT}/memberships/mallory`)));
 });
 
+// Without this the membership check is circular and a non member cannot tell
+// "no membership" apart from "read denied".
+test("a signed in non member can read their own missing membership document", options, async () => {
+  await assertSucceeds(getDoc(doc(stranger(), `tenants/${TENANT}/memberships/mallory`)));
+  await assertFails(getDoc(doc(anonymous(), `tenants/${TENANT}/memberships/mallory`)));
+});
+
 test("no client can write anywhere", options, async () => {
   const db = member();
   await assertFails(setDoc(doc(db, `tenants/${TENANT}`), { name: "hijacked" }));
