@@ -27,20 +27,24 @@ async function startApp(t, env = {}) {
   return { app, origin: `http://127.0.0.1:${app.server.address().port}` };
 }
 
+// capturedAt must stay inside the retention window, so it is anchored to the current
+// clock. Fixed dates would silently drop out of the window as real time passes.
 function seedHistory(app, count, { expiresAt = "2099-01-01T00:00:00Z" } = {}) {
+  const baseMs = Date.now() - count * 60_000;
   for (let index = 0; index < count; index += 1) {
     const suffix = `${index}`.padStart(2, "0");
+    const capturedAtMs = baseMs + index * 60_000;
     app.store.seedSnapshotHistory({
       tenantId: TENANT_ID,
       hostId: HOST_ID,
       snapshotId: `snapshot-${suffix}`,
       agentId: "agent_01",
-      capturedAt: `2026-08-17T10:${suffix}:00Z`,
+      capturedAt: new Date(capturedAtMs).toISOString(),
       expiresAt,
       processCount: index,
       bodyHash: `hash-${suffix}`,
       published: true,
-      storedAt: `2026-08-17T10:${suffix}:01Z`
+      storedAt: new Date(capturedAtMs + 1000).toISOString()
     });
   }
 }

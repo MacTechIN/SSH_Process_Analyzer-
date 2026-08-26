@@ -24,19 +24,22 @@ test("history pages newest first with a signed cursor", options, async () => {
   const tenantId = "history-tenant";
   const hostId = "host-1";
   await store.seedMembership({ tenantId, uid: "alice", role: "viewer" });
+  // Anchored to the current clock so the rows stay inside the retention window.
+  const baseMs = Date.now() - 4 * 60_000;
   for (let index = 0; index < 4; index += 1) {
     const suffix = `${index}`.padStart(2, "0");
+    const capturedAtMs = baseMs + index * 60_000;
     await store.seedSnapshotHistory({
       tenantId,
       hostId,
       snapshotId: `snapshot-${suffix}`,
       agentId: "agent_history",
-      capturedAt: `2026-08-17T10:${suffix}:00Z`,
+      capturedAt: new Date(capturedAtMs).toISOString(),
       expiresAt: "2099-01-01T00:00:00Z",
       processCount: index,
       bodyHash: `hash-${suffix}`,
       published: true,
-      storedAt: `2026-08-17T10:${suffix}:01Z`
+      storedAt: new Date(capturedAtMs + 1000).toISOString()
     });
   }
 
