@@ -87,6 +87,8 @@ npm run deploy:web                    # 빌드, 아티팩트 검사, Firebase Ho
 - 진행 전: Cloud Run 배포 매니페스트와 service account IAM
 - 추후 반영: Figma 파일 기반 UI 컴포넌트와 스타일
 
+진행 상황을 한눈에 보려면 [개발 현황 대시보드](https://claude.ai/code/artifact/a015e994-48a3-434c-a8d7-2127f572926e)를 참고한다. Phase 진행률, 릴리스 기록, 테스트 구성, 무료 할당량 사용률, 배포 전 수정한 설계 결함을 정리한 화면이다. 링크는 기본 비공개이며 소유자가 공유해야 다른 사람이 열 수 있다.
+
 운영 정책 기본값과 배포 전 외부 입력 항목은 [docs/phase0-decisions.md](docs/phase0-decisions.md), 전체 구현 계획은 [implement.md](implement.md)에서 관리한다.
 
 ## 개발 진행 기록
@@ -306,6 +308,13 @@ tests/
 - 테스트: `npm test` `117`개 성공
 - 남은 작업: 두 번째 수집 대상 서버 등록, staging P0/E2E
 
+### 2026-08-28 - v0.9.1
+
+- history 테스트 픽스처가 고정 날짜를 써서 보존 기간 `7`일을 벗어나면 실패하던 문제 수정. `capturedAt`을 현재 시각 기준 상대값으로 교체
+- 개발 현황 대시보드를 만들고 README에 연결. Phase 진행률, 릴리스 `13`건, 테스트 구성, Firestore 무료 쓰기 한도 사용률, 배포 전 수정한 설계 결함 `7`건을 정리
+- 테스트: `npm test` `117`개, `npm run test:emulator` `31`개 성공
+- 운영: `1`시간 주기 타이머가 `24`시간 동안 `23`회 모두 성공. 하루 쓰기 약 `18,500`회로 무료 한도 `20,000` 이내
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)
@@ -318,3 +327,4 @@ tests/
 - [Cleanup job과 TTL 정책](docs/cleanup-and-ttl.md)
 - [Snapshot history 조회 API](docs/history-api.md)
 - [웹앱 무료 배포](docs/deploy-web.md)
+- [개발 현황 대시보드](https://claude.ai/code/artifact/a015e994-48a3-434c-a8d7-2127f572926e) · 비공개 링크
