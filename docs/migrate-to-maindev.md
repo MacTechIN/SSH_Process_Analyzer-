@@ -18,7 +18,15 @@ Firebase 프로젝트, Rules, 웹앱은 그대로 둔다. 바뀌는 것은 API�
 
 ## 0. 사전 확인
 
-`maindev`에서 확인한다.
+클론 후 `maindev`에서 점검 스크립트를 돌린다. 아무것도 설치하거나 바꾸지 않고 조건만 확인한다.
+
+```bash
+./scripts/preflight-host.sh
+```
+
+node 버전, systemd 사용자 세션과 linger, tailscale 주소, 포트 충돌, service account 키 권한, 예상 수집량과 하루 쓰기 횟수를 확인하고 실패 항목이 있으면 종료 코드 `1`을 반환한다.
+
+개별 확인은 아래와 같다.
 
 ```bash
 node --version      # v20 이상
