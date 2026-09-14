@@ -56,7 +56,18 @@ export function createApiServer({ service, historyService, config, logger = () =
       .catch((error) => {
         const status = error instanceof ApiError ? error.status : 500;
         const code = error instanceof ApiError ? error.code : "INTERNAL_ERROR";
-        logger({ correlationId: id, method: request.method, path: request.url, status, code });
+        logger({
+          correlationId: id,
+          method: request.method,
+          path: request.url,
+          status,
+          code,
+          // An unmapped failure is undiagnosable without its cause, so the error identity
+          // is logged. Signatures, headers, and snapshot bodies are never logged.
+          ...(error instanceof ApiError
+            ? {}
+            : { cause: `${error?.name ?? "Error"}: ${String(error?.message ?? "").slice(0, 200)}` })
+        });
         sendJson(response, status, { code, correlationId: id }, id, request);
       });
   });

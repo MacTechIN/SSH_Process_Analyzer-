@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 import { createApp } from "../../collector-api/src/index.js";
+import { createApiServer } from "../../collector-api/src/server.js";
 import {
   buildProcess,
   buildSnapshot,
@@ -348,4 +349,54 @@ test("the dev read api stays disabled unless it is explicitly enabled", async (t
 
   const current = await fetch(`${origin}/v1/tenants/${TENANT_ID}/hosts/${HOST_ID}/current`);
   assert.equal(current.status, 404);
+});
+
+test("an unmapped failure logs its cause without leaking request material", async (t) => {
+  const entries = [];
+  const keyPair = createAgentKeyPair();
+  const app = createApp({ DEV_READ_API_ENABLED: "true" });
+  app.store.seedAgent({
+    tenantId: TENANT_ID,
+    hostId: HOST_ID,
+    agentId: AGENT_ID,
+    quarantined: false,
+    keys: { [KID]: { publicKey: keyPair.publicKeyBase64url, revokedAt: null } }
+  });
+  app.store.seedHost({ tenantId: TENANT_ID, hostId: HOST_ID });
+  app.service.ingest = async () => {
+    throw new Error("firestore unavailable");
+  };
+  app.server.close();
+  const server = createApiServer({
+    service: app.service,
+    historyService: app.historyService,
+    config: app.config,
+    logger: (entry) => entries.push(entry)
+  });
+  await new Promise((resolve) => server.listen(0, resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const wireBody = snapshotBody();
+  const response = await fetch(`${origin}/v1/snapshots`, {
+    method: "POST",
+    headers: signedHeaders({
+      wireBody,
+      agentId: AGENT_ID,
+      kid: KID,
+      privateKey: keyPair.privateKey,
+      timestamp: rfc3339(new Date()),
+      nonce: nonceHex()
+    }),
+    body: wireBody
+  });
+
+  assert.equal(response.status, 500);
+  const logged = entries.find((entry) => entry.status === 500);
+  assert.equal(logged.code, "INTERNAL_ERROR");
+  assert.match(logged.cause, /^Error: firestore unavailable/);
+
+  const serialized = JSON.stringify(entries);
+  assert.ok(!serialized.includes("x-agent-signature"), "서명은 기록하지 않는다");
+  assert.ok(!serialized.includes("processKey"), "snapshot 본문은 기록하지 않는다");
 });

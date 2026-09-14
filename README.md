@@ -315,6 +315,16 @@ tests/
 - 테스트: `npm test` `117`개, `npm run test:emulator` `31`개 성공
 - 운영: `1`시간 주기 타이머가 `24`시간 동안 `23`회 모두 성공. 하루 쓰기 약 `18,500`회로 무료 한도 `20,000` 이내
 
+### 2026-09-15 - v0.10.0
+
+- maindev 이관 준비. `~/workspace/ssh_process_mgmt` 경로 기준 절차와 스크립트 정리
+- collector-api를 sudo 없이 사용자 systemd 서비스로 설치하는 스크립트 추가. cleanup 타이머를 함께 등록하고 재실행 시 `CURSOR_SIGNING_SECRET`을 유지한다
+- 이관 대상 서버 사전 점검 스크립트 추가. node 버전, linger, tailscale 주소, 포트 충돌, 키 권한, 예상 수집량을 확인한다
+- 미분류 오류를 `500`으로 응답할 때 원인을 기록하지 않아 진단이 불가능하던 문제 수정. 오류 이름과 메시지 `200`자만 남기며 서명, header, snapshot 본문은 기록하지 않는다
+- 테스트: `npm test` `118`개 성공
+- 운영: 이 서버의 collector-api와 수집 타이머를 정지하고 비활성화. 설정과 키는 유지하여 재개할 수 있게 두었다
+- 남은 작업: maindev에서 이관 실행, 두 번째 수집 서버 등록, staging P0/E2E
+
 ## 참고 문서
 
 - [데이터 모델 v1](docs/data-model-v1.md)
@@ -327,4 +337,5 @@ tests/
 - [Cleanup job과 TTL 정책](docs/cleanup-and-ttl.md)
 - [Snapshot history 조회 API](docs/history-api.md)
 - [웹앱 무료 배포](docs/deploy-web.md)
+- [maindev 이관 절차](docs/migrate-to-maindev.md)
 - [개발 현황 대시보드](https://claude.ai/code/artifact/a015e994-48a3-434c-a8d7-2127f572926e) · 비공개 링크
